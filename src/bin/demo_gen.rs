@@ -43,6 +43,7 @@ fn main() {
     let render_mesh = Node::RenderMesh(
         Box::new(Node::Identifier("shader".to_string())),
         Box::new(Node::ArrayLiteral(vec![])), // Dummy vertex array, using SV_VertexID inside WGSL
+        Box::new(Node::ArrayLiteral(vec![])), // Empty uniform payload for old demo
     );
 
     stmts.push(Node::PollEvents(Box::new(Node::Block(vec![render_mesh]))));

@@ -155,6 +155,74 @@ impl ExecutionEngine {
             Node::Mul(l, r) => self.do_math(l, r, '*'),
             Node::Div(l, r) => self.do_math(l, r, '/'),
 
+            // Math & Time & Matrix
+            Node::Sin(n) => match self.evaluate(n) {
+                ExecResult::Value(RelType::Float(f)) => ExecResult::Value(RelType::Float(f.sin())),
+                ExecResult::Value(RelType::Int(i)) => {
+                    ExecResult::Value(RelType::Float((i as f64).sin()))
+                }
+                fault => fault,
+            },
+            Node::Cos(n) => match self.evaluate(n) {
+                ExecResult::Value(RelType::Float(f)) => ExecResult::Value(RelType::Float(f.cos())),
+                ExecResult::Value(RelType::Int(i)) => {
+                    ExecResult::Value(RelType::Float((i as f64).cos()))
+                }
+                fault => fault,
+            },
+            Node::Time => {
+                use std::time::{SystemTime, UNIX_EPOCH};
+                let t = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs_f64();
+                ExecResult::Value(RelType::Float(t))
+            }
+            Node::Mat4Mul(l, r) => {
+                let lv = self.evaluate(l);
+                let rv = self.evaluate(r);
+                if let (
+                    ExecResult::Value(RelType::Array(l_arr)),
+                    ExecResult::Value(RelType::Array(r_arr)),
+                ) = (lv, rv)
+                {
+                    if l_arr.len() == 16 && r_arr.len() == 16 {
+                        let mut lm = [0.0f64; 16];
+                        let mut rm = [0.0f64; 16];
+                        for i in 0..16 {
+                            lm[i] = match l_arr[i] {
+                                RelType::Float(f) => f,
+                                RelType::Int(v) => v as f64,
+                                _ => 0.0,
+                            };
+                            rm[i] = match r_arr[i] {
+                                RelType::Float(f) => f,
+                                RelType::Int(v) => v as f64,
+                                _ => 0.0,
+                            };
+                        }
+                        let mut out = [0.0f64; 16];
+                        // Column-major multiplication
+                        // C_col_row = sum_i( A_i_row * B_col_i )
+                        for col in 0..4 {
+                            for row in 0..4 {
+                                let mut sum = 0.0;
+                                for i in 0..4 {
+                                    sum += lm[i * 4 + row] * rm[col * 4 + i];
+                                }
+                                out[col * 4 + row] = sum;
+                            }
+                        }
+                        let out_arr = out.iter().map(|&f| RelType::Float(f)).collect();
+                        ExecResult::Value(RelType::Array(out_arr))
+                    } else {
+                        ExecResult::Fault("Mat4Mul requires 16-element Float Arrays".to_string())
+                    }
+                } else {
+                    ExecResult::Fault("Mat4Mul requires two Arrays".to_string())
+                }
+            }
+
             // Logic
             Node::Eq(l, r) => {
                 let lv = self.evaluate(l);
@@ -502,18 +570,36 @@ impl ExecutionEngine {
                     ExecResult::Fault("LoadShader expects String".to_string())
                 }
             }
-            Node::RenderMesh(shader_id_node, _verts) => {
+            Node::RenderMesh(shader_id_node, verts_node, uniform_node) => {
                 let shader_val = self.evaluate(shader_id_node);
+                let _verts_val = self.evaluate(verts_node);
+                let uniform_val = self.evaluate(uniform_node);
+
                 if let ExecResult::Value(RelType::Int(s_id)) = shader_val {
                     if let (Some(device), Some(queue), Some(surface), Some(config)) =
                         (&self.device, &self.queue, &self.surface, &self.config)
                     {
                         let shader = &self.shaders[s_id as usize];
 
+                        let bind_group_layout =
+                            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                                entries: &[wgpu::BindGroupLayoutEntry {
+                                    binding: 0,
+                                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                                    ty: wgpu::BindingType::Buffer {
+                                        ty: wgpu::BufferBindingType::Uniform,
+                                        has_dynamic_offset: false,
+                                        min_binding_size: None,
+                                    },
+                                    count: None,
+                                }],
+                                label: Some("uniform_bind_group_layout"),
+                            });
+
                         let pipeline_layout =
                             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                                 label: None,
-                                bind_group_layouts: &[],
+                                bind_group_layouts: &[&bind_group_layout],
                                 push_constant_ranges: &[],
                             });
 
@@ -549,6 +635,38 @@ impl ExecutionEngine {
                                     })
                                 });
 
+                        let mut active_bind_group = None;
+
+                        // Parse uniforms
+                        if let ExecResult::Value(RelType::Array(arr)) = uniform_val {
+                            let floats: Vec<f32> = arr
+                                .into_iter()
+                                .map(|v| match v {
+                                    RelType::Float(f) => f as f32,
+                                    RelType::Int(i) => i as f32,
+                                    _ => 0.0,
+                                })
+                                .collect();
+
+                            let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                                label: Some("Uniform Buffer"),
+                                size: (floats.len() * 4).max(64) as u64,
+                                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                                mapped_at_creation: false,
+                            });
+                            queue.write_buffer(&buffer, 0, bytemuck::cast_slice(&floats));
+
+                            active_bind_group =
+                                Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                    layout: &bind_group_layout,
+                                    entries: &[wgpu::BindGroupEntry {
+                                        binding: 0,
+                                        resource: buffer.as_entire_binding(),
+                                    }],
+                                    label: Some("uniform_bind_group"),
+                                }));
+                        }
+
                         match surface.get_current_texture() {
                             Ok(frame) => {
                                 let view = frame
@@ -581,7 +699,10 @@ impl ExecutionEngine {
                                             occlusion_query_set: None,
                                         });
                                     rpass.set_pipeline(pipeline);
-                                    rpass.draw(0..3, 0..1);
+                                    if let Some(bg) = &active_bind_group {
+                                        rpass.set_bind_group(0, bg, &[]);
+                                    }
+                                    rpass.draw(0..36, 0..1); // 36 vertices handles cubes natively!
                                 }
                                 queue.submit(Some(encoder.finish()));
                                 frame.present();
@@ -596,7 +717,7 @@ impl ExecutionEngine {
                         ExecResult::Fault("Graphics context not initialized".to_string())
                     }
                 } else {
-                    ExecResult::Fault("RenderMesh expects (Int, Array)".to_string())
+                    ExecResult::Fault("RenderMesh expects (Int, Array, Array)".to_string())
                 }
             }
             Node::PollEvents(body) => {

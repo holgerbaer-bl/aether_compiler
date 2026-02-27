@@ -15,8 +15,13 @@ path = "src/bin/demo_gen.rs"
 name = "run_aec"
 path = "src/bin/run_aec.rs"
 
+[[bin]]
+name = "cube_gen"
+path = "src/bin/cube_gen.rs"
+
 [dependencies]
 bincode = "1.3.3"
+bytemuck = "1.25.0"
 pollster = "0.4.0"
 serde = { version = "1.0.228", features = ["derive"] }
 wgpu = "0.20"

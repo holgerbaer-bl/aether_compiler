@@ -36,6 +36,10 @@ Operations take a left-hand side (`lhs`) and right-hand side (`rhs`).
 *   **`Sub(Box<Node>, Box<Node>)`**: Mathematical subtraction.
 *   **`Mul(Box<Node>, Box<Node>)`**: Mathematical multiplication.
 *   **`Div(Box<Node>, Box<Node>)`**: Mathematical division.
+*   **`Sin(Box<Node>)`**: Returns the Sine of a `Float`.
+*   **`Cos(Box<Node>)`**: Returns the Cosine of a `Float`.
+*   **`Mat4Mul(Box<Node>, Box<Node>)`**: Multiplies two 16-element Float Arrays (Column-Major 4x4 Matrices) and returns the resulting 16-element Float Array.
+*   **`Time()`**: Returns the monotonic application runtime in seconds as a `Float`.
 *   **`Eq(Box<Node>, Box<Node>)`**: Logical equality comparison.
 *   **`Lt(Box<Node>, Box<Node>)`**: Less than comparison.
 
@@ -61,7 +65,7 @@ Operations take a left-hand side (`lhs`) and right-hand side (`rhs`).
 *   **`InitWindow(Box<Node>, Box<Node>, Box<Node>)`**: Initializes an OS Window (Width, Height, Title). Opens the window on the system.
 *   **`InitGraphics()`**: Initializes the GPU Adapter and Device.
 *   **`LoadShader(Box<Node>)`**: Compiles a WGSL Shader from a String. Returns a Shader Identifier.
-*   **`RenderMesh(Box<Node>, Box<Node>)`**: Executes a RenderPass draw call to the screen (Shader Identifier, Vertex Buffer Array).
+*   **`RenderMesh(Box<Node>, Box<Node>, Box<Node>)`**: Executes a RenderPass draw call to the screen (Shader Identifier, Vertex Buffer Array, MVP Matrix Uniform Array).
 *   **`PollEvents(Box<Node>)`**: Submits a block of nodes to run inside the Window Event Loop, intercepting close requests.
 
 ### 4.9. Control Flow

@@ -17,6 +17,10 @@ pub enum Node {
     Sub(Box<Node>, Box<Node>),
     Mul(Box<Node>, Box<Node>),
     Div(Box<Node>, Box<Node>),
+    Sin(Box<Node>),
+    Cos(Box<Node>),
+    Mat4Mul(Box<Node>, Box<Node>),
+    Time,
     Eq(Box<Node>, Box<Node>),
     Lt(Box<Node>, Box<Node>),
 
@@ -46,7 +50,7 @@ pub enum Node {
     InitWindow(Box<Node>, Box<Node>, Box<Node>), // W, H, Title
     InitGraphics,                                // Bootstraps WGPU context
     LoadShader(Box<Node>),                       // WGSL string
-    RenderMesh(Box<Node>, Box<Node>),            // Shader ID, Vertices
+    RenderMesh(Box<Node>, Box<Node>, Box<Node>), // Shader ID, Vertices, Uniform MVP Matrix
     PollEvents(Box<Node>),                       // Execution loop intercept
 
     // Control Flow
