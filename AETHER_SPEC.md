@@ -68,7 +68,12 @@ Operations take a left-hand side (`lhs`) and right-hand side (`rhs`).
 *   **`RenderMesh(Box<Node>, Box<Node>, Box<Node>)`**: Executes a RenderPass draw call to the screen (Shader Identifier, Vertex Buffer Array, MVP Matrix Uniform Array).
 *   **`PollEvents(Box<Node>)`**: Submits a block of nodes to run inside the Window Event Loop, intercepting close requests.
 
-### 4.9. Control Flow
+### 4.9. 8-Bit Audio Engine (CPAL FFI)
+*   **`InitAudio()`**: Bootstraps the `cpal` low-latency audio stream and software synthesizer.
+*   **`PlayNote(Box<Node>, Box<Node>, Box<Node>)`**: Starts synthesizing a tone. (Channel: Integer 0-3, Frequency: Float Hz, Waveform: Integer 0-4) (0: Sine, 1: Square, 2: Sawtooth, 3: Triangle, 4: Noise).
+*   **`StopNote(Box<Node>)`**: Mutes the specified Channel.
+
+### 4.10. Control Flow
 *   **`If(Box<Node>, Box<Node>, Option<Box<Node>>)`**: Evaluates the first `Node` (Condition). If true, executes the second `Node` (Then Branch). Otherwise executes the third optional `Node` (Else Branch).
 *   **`While(Box<Node>, Box<Node>)`**: Evaluates the first `Node`. While true, repeatedly executes the second `Node` (Body block).
 *   **`Block(Vec<Node>)`**: Unconditionally executes a sequence of nodes in order. The block returns the value of its last node, or implicit void if empty.

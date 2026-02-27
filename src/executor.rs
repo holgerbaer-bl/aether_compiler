@@ -1,4 +1,5 @@
 use crate::ast::Node;
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -29,9 +30,28 @@ impl std::fmt::Display for RelType {
     }
 }
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use winit::event_loop::EventLoop;
 use winit::window::{Window, WindowBuilder};
+
+#[derive(Clone, Copy)]
+pub struct VoiceState {
+    pub active: bool,
+    pub freq: f32,
+    pub waveform: u8, // 0=Sine, 1=Square, 2=Saw, 3=Tri, 4=Noise
+    pub phase: f32,
+}
+
+impl Default for VoiceState {
+    fn default() -> Self {
+        VoiceState {
+            active: false,
+            freq: 440.0,
+            waveform: 0,
+            phase: 0.0,
+        }
+    }
+}
 
 pub struct ExecutionEngine {
     pub memory: HashMap<String, RelType>,
@@ -43,6 +63,10 @@ pub struct ExecutionEngine {
     pub config: Option<wgpu::SurfaceConfiguration>,
     pub shaders: Vec<wgpu::ShaderModule>,
     pub render_pipelines: HashMap<usize, wgpu::RenderPipeline>,
+
+    // Audio backend state
+    pub voices: Option<Arc<Mutex<[VoiceState; 4]>>>,
+    pub audio_stream: Option<cpal::Stream>,
 }
 
 pub enum ExecResult {
@@ -63,6 +87,8 @@ impl ExecutionEngine {
             config: None,
             shaders: Vec::new(),
             render_pipelines: HashMap::new(),
+            voices: None,
+            audio_stream: None,
         }
     }
 
@@ -753,6 +779,282 @@ impl ExecutionEngine {
                     }
                 } else {
                     ExecResult::Fault("PollEvents requires an active Window".to_string())
+                }
+            }
+
+            // Audio Engine (CPAL FFI)
+            Node::InitAudio => {
+                let host = cpal::default_host();
+                if let Some(device) = host.default_output_device() {
+                    let mut supported_configs_range = device.supported_output_configs().unwrap();
+                    let supported_config = supported_configs_range
+                        .next()
+                        .unwrap()
+                        .with_max_sample_rate();
+                    let sample_rate = supported_config.sample_rate() as f32; // wait, if cpal changed this to u32, this will work.
+                    let config = supported_config.config();
+                    let channels = config.channels as usize;
+
+                    let voices = Arc::new(Mutex::new([VoiceState::default(); 4]));
+                    self.voices = Some(voices.clone());
+
+                    let err_fn =
+                        |err| eprintln!("An error occurred on the output audio stream: {}", err);
+
+                    let stream = match supported_config.sample_format() {
+                        cpal::SampleFormat::F32 => {
+                            device
+                                .build_output_stream(
+                                    &config,
+                                    move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                                        let mut voices_lock = voices.lock().unwrap();
+                                        for frame in data.chunks_mut(channels) {
+                                            let mut sample: f32 = 0.0;
+                                            for voice in voices_lock.iter_mut() {
+                                                if voice.active {
+                                                    // Advance phase
+                                                    voice.phase = (voice.phase
+                                                        + voice.freq / sample_rate)
+                                                        % 1.0;
+                                                    let p = voice.phase;
+
+                                                    let v_sample = match voice.waveform {
+                                                        0 => (p * 2.0 * std::f32::consts::PI).sin(), // Sine
+                                                        1 => {
+                                                            if p < 0.5 {
+                                                                1.0
+                                                            } else {
+                                                                -1.0
+                                                            }
+                                                        } // Square
+                                                        2 => (p * 2.0) - 1.0, // Saw
+                                                        3 => {
+                                                            if p < 0.5 {
+                                                                p * 4.0 - 1.0
+                                                            } else {
+                                                                3.0 - p * 4.0
+                                                            }
+                                                        } // Tri
+                                                        4 => rand::random::<f32>() * 2.0 - 1.0, // Noise
+                                                        _ => 0.0,
+                                                    };
+                                                    sample += v_sample * 0.15; // Volume scaling per voice
+                                                }
+                                            }
+                                            for channel in frame.iter_mut() {
+                                                *channel = sample;
+                                            }
+                                        }
+                                    },
+                                    err_fn,
+                                    None,
+                                )
+                                .unwrap()
+                        }
+                        cpal::SampleFormat::I16 => {
+                            device
+                                .build_output_stream(
+                                    &config,
+                                    move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
+                                        let mut voices_lock = voices.lock().unwrap();
+                                        for frame in data.chunks_mut(channels) {
+                                            let mut sample: f32 = 0.0;
+                                            for voice in voices_lock.iter_mut() {
+                                                if voice.active {
+                                                    voice.phase = (voice.phase
+                                                        + voice.freq / sample_rate)
+                                                        % 1.0;
+                                                    let p = voice.phase;
+
+                                                    let v_sample = match voice.waveform {
+                                                        0 => (p * 2.0 * std::f32::consts::PI).sin(), // Sine
+                                                        1 => {
+                                                            if p < 0.5 {
+                                                                1.0
+                                                            } else {
+                                                                -1.0
+                                                            }
+                                                        } // Square
+                                                        2 => (p * 2.0) - 1.0, // Saw
+                                                        3 => {
+                                                            if p < 0.5 {
+                                                                p * 4.0 - 1.0
+                                                            } else {
+                                                                3.0 - p * 4.0
+                                                            }
+                                                        } // Tri
+                                                        4 => rand::random::<f32>() * 2.0 - 1.0, // Noise
+                                                        _ => 0.0,
+                                                    };
+                                                    sample += v_sample * 0.15; // Volume scaling per voice
+                                                }
+                                            }
+                                            let int_sample = (sample.max(-1.0).min(1.0)
+                                                * f32::from(std::i16::MAX))
+                                                as i16;
+                                            for channel in frame.iter_mut() {
+                                                *channel = int_sample;
+                                            }
+                                        }
+                                    },
+                                    err_fn,
+                                    None,
+                                )
+                                .unwrap()
+                        }
+                        cpal::SampleFormat::U16 => {
+                            device
+                                .build_output_stream(
+                                    &config,
+                                    move |data: &mut [u16], _: &cpal::OutputCallbackInfo| {
+                                        let mut voices_lock = voices.lock().unwrap();
+                                        for frame in data.chunks_mut(channels) {
+                                            let mut sample: f32 = 0.0;
+                                            for voice in voices_lock.iter_mut() {
+                                                if voice.active {
+                                                    voice.phase = (voice.phase
+                                                        + voice.freq / sample_rate)
+                                                        % 1.0;
+                                                    let p = voice.phase;
+
+                                                    let v_sample = match voice.waveform {
+                                                        0 => (p * 2.0 * std::f32::consts::PI).sin(), // Sine
+                                                        1 => {
+                                                            if p < 0.5 {
+                                                                1.0
+                                                            } else {
+                                                                -1.0
+                                                            }
+                                                        } // Square
+                                                        2 => (p * 2.0) - 1.0, // Saw
+                                                        3 => {
+                                                            if p < 0.5 {
+                                                                p * 4.0 - 1.0
+                                                            } else {
+                                                                3.0 - p * 4.0
+                                                            }
+                                                        } // Tri
+                                                        4 => rand::random::<f32>() * 2.0 - 1.0, // Noise
+                                                        _ => 0.0,
+                                                    };
+                                                    sample += v_sample * 0.15; // Volume scaling per voice
+                                                }
+                                            }
+                                            let int_sample = ((sample.max(-1.0).min(1.0) * 0.5
+                                                + 0.5)
+                                                * f32::from(std::u16::MAX))
+                                                as u16;
+                                            for channel in frame.iter_mut() {
+                                                *channel = int_sample;
+                                            }
+                                        }
+                                    },
+                                    err_fn,
+                                    None,
+                                )
+                                .unwrap()
+                        }
+                        cpal::SampleFormat::U8 => {
+                            device
+                                .build_output_stream(
+                                    &config,
+                                    move |data: &mut [u8], _: &cpal::OutputCallbackInfo| {
+                                        let mut voices_lock = voices.lock().unwrap();
+                                        for frame in data.chunks_mut(channels) {
+                                            let mut sample: f32 = 0.0;
+                                            for voice in voices_lock.iter_mut() {
+                                                if voice.active {
+                                                    voice.phase = (voice.phase
+                                                        + voice.freq / sample_rate)
+                                                        % 1.0;
+                                                    let p = voice.phase;
+
+                                                    let v_sample = match voice.waveform {
+                                                        0 => (p * 2.0 * std::f32::consts::PI).sin(), // Sine
+                                                        1 => {
+                                                            if p < 0.5 {
+                                                                1.0
+                                                            } else {
+                                                                -1.0
+                                                            }
+                                                        } // Square
+                                                        2 => (p * 2.0) - 1.0, // Saw
+                                                        3 => {
+                                                            if p < 0.5 {
+                                                                p * 4.0 - 1.0
+                                                            } else {
+                                                                3.0 - p * 4.0
+                                                            }
+                                                        } // Tri
+                                                        4 => rand::random::<f32>() * 2.0 - 1.0, // Noise
+                                                        _ => 0.0,
+                                                    };
+                                                    sample += v_sample * 0.15; // Volume scaling per voice
+                                                }
+                                            }
+                                            let int_sample = ((sample.max(-1.0).min(1.0) * 0.5
+                                                + 0.5)
+                                                * f32::from(std::u8::MAX))
+                                                as u8;
+                                            for channel in frame.iter_mut() {
+                                                *channel = int_sample;
+                                            }
+                                        }
+                                    },
+                                    err_fn,
+                                    None,
+                                )
+                                .unwrap()
+                        }
+                        f => panic!("Unsupported Audio Format: {:?}", f),
+                    };
+
+                    stream.play().unwrap();
+                    self.audio_stream = Some(stream);
+                    ExecResult::Value(RelType::Void)
+                } else {
+                    ExecResult::Fault("No Audio Output Device Available".to_string())
+                }
+            }
+            Node::PlayNote(channel_node, freq_node, wave_node) => {
+                let cv = self.evaluate(channel_node);
+                let fv = self.evaluate(freq_node);
+                let wv = self.evaluate(wave_node);
+
+                if let (
+                    Some(voices),
+                    ExecResult::Value(RelType::Int(c)),
+                    ExecResult::Value(RelType::Float(f)),
+                    ExecResult::Value(RelType::Int(w)),
+                ) = (&self.voices, cv, fv, wv)
+                {
+                    if c >= 0 && c < 4 {
+                        let mut v_lock = voices.lock().unwrap();
+                        v_lock[c as usize].active = true;
+                        v_lock[c as usize].freq = f as f32;
+                        v_lock[c as usize].waveform = w as u8;
+                        ExecResult::Value(RelType::Void)
+                    } else {
+                        ExecResult::Fault("Invalid Audio Channel ID".to_string())
+                    }
+                } else {
+                    ExecResult::Fault(
+                        "PlayNote expects (Int, Float, Int) and an InitAudio call".to_string(),
+                    )
+                }
+            }
+            Node::StopNote(channel_node) => {
+                let cv = self.evaluate(channel_node);
+                if let (Some(voices), ExecResult::Value(RelType::Int(c))) = (&self.voices, cv) {
+                    if c >= 0 && c < 4 {
+                        let mut v_lock = voices.lock().unwrap();
+                        v_lock[c as usize].active = false;
+                        ExecResult::Value(RelType::Void)
+                    } else {
+                        ExecResult::Fault("Invalid Audio Channel ID".to_string())
+                    }
+                } else {
+                    ExecResult::Fault("StopNote expects (Int) and an InitAudio call".to_string())
                 }
             }
 

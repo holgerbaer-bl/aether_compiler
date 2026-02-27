@@ -53,6 +53,11 @@ pub enum Node {
     RenderMesh(Box<Node>, Box<Node>, Box<Node>), // Shader ID, Vertices, Uniform MVP Matrix
     PollEvents(Box<Node>),                       // Execution loop intercept
 
+    // Audio Engine (CPAL FFI)
+    InitAudio,
+    PlayNote(Box<Node>, Box<Node>, Box<Node>), // Channel, Frequency, Waveform
+    StopNote(Box<Node>),                       // Channel
+
     // Control Flow
     If(Box<Node>, Box<Node>, Option<Box<Node>>),
     While(Box<Node>, Box<Node>),

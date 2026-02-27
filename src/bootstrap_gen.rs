@@ -66,11 +66,11 @@ fn main() {
         ),
     ));
 
-    // 3. Mathematical AST Validation Chain (39 supported Nodes in Spec)
+    // 3. Mathematical AST Validation Chain (48 supported Nodes in Spec)
     let mut check_chain = Node::Return(Box::new(str_lit(
         "Fault: Unknown AST Tag! Compilation aborted.",
     )));
-    for i in (0..=38).rev() {
+    for i in (0..=47).rev() {
         check_chain = Node::If(
             Box::new(Node::Eq(Box::new(var("tag")), Box::new(int(i)))),
             Box::new(Node::Block(vec![ /* Tag is recognized */ ])),
