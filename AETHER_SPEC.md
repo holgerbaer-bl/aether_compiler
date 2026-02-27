@@ -73,7 +73,13 @@ Operations take a left-hand side (`lhs`) and right-hand side (`rhs`).
 *   **`PlayNote(Box<Node>, Box<Node>, Box<Node>)`**: Starts synthesizing a tone. (Channel: Integer 0-3, Frequency: Float Hz, Waveform: Integer 0-4) (0: Sine, 1: Square, 2: Sawtooth, 3: Triangle, 4: Noise).
 *   **`StopNote(Box<Node>)`**: Mutes the specified Channel.
 
-### 4.10. Control Flow
+### 4.10. The Asset Pipeline (PS2-Era Data)
+*   **`LoadMesh(Box<Node>)`**: Parses an `.obj` file from the given Path. Returns a `MeshID`.
+*   **`LoadTexture(Box<Node>)`**: Parses a `.png` file from the given Path. Returns a `TextureID`.
+*   **`PlayAudioFile(Box<Node>)`**: Loads a `.wav` file and streams it dynamically into the active CPAL audio buffer.
+*   **`RenderAsset(Box<Node>, Box<Node>, Box<Node>, Box<Node>)`**: Takes `ShaderID`, `MeshID`, `TextureID`, and `UniformArray`. Renders textured models over WGPU.
+
+### 4.11. Control Flow
 *   **`If(Box<Node>, Box<Node>, Option<Box<Node>>)`**: Evaluates the first `Node` (Condition). If true, executes the second `Node` (Then Branch). Otherwise executes the third optional `Node` (Else Branch).
 *   **`While(Box<Node>, Box<Node>)`**: Evaluates the first `Node`. While true, repeatedly executes the second `Node` (Body block).
 *   **`Block(Vec<Node>)`**: Unconditionally executes a sequence of nodes in order. The block returns the value of its last node, or implicit void if empty.

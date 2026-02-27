@@ -31,6 +31,7 @@ impl std::fmt::Display for RelType {
 }
 
 use std::sync::{Arc, Mutex};
+use wgpu::util::DeviceExt;
 use winit::event_loop::EventLoop;
 use winit::window::{Window, WindowBuilder};
 
@@ -53,6 +54,12 @@ impl Default for VoiceState {
     }
 }
 
+pub struct MeshBuffers {
+    pub vbo: wgpu::Buffer,
+    pub ibo: wgpu::Buffer,
+    pub index_count: u32,
+}
+
 pub struct ExecutionEngine {
     pub memory: HashMap<String, RelType>,
     pub event_loop: Option<EventLoop<()>>,
@@ -64,8 +71,19 @@ pub struct ExecutionEngine {
     pub shaders: Vec<wgpu::ShaderModule>,
     pub render_pipelines: HashMap<usize, wgpu::RenderPipeline>,
 
+    // Asset pipeline state
+    pub meshes: Vec<MeshBuffers>,
+    pub textures: Vec<(
+        wgpu::Texture,
+        wgpu::TextureView,
+        wgpu::BindGroup,
+        wgpu::BindGroupLayout,
+    )>,
+
     // Audio backend state
     pub voices: Option<Arc<Mutex<[VoiceState; 4]>>>,
+    pub stream_samples: Option<Arc<Mutex<Vec<f32>>>>,
+    pub stream_pos: Option<Arc<Mutex<usize>>>,
     pub audio_stream: Option<cpal::Stream>,
 }
 
@@ -87,7 +105,11 @@ impl ExecutionEngine {
             config: None,
             shaders: Vec::new(),
             render_pipelines: HashMap::new(),
+            meshes: Vec::new(),
+            textures: Vec::new(),
             voices: None,
+            stream_samples: None,
+            stream_pos: None,
             audio_stream: None,
         }
     }
@@ -746,6 +768,433 @@ impl ExecutionEngine {
                     ExecResult::Fault("RenderMesh expects (Int, Array, Array)".to_string())
                 }
             }
+            Node::LoadMesh(path_node) => {
+                if let ExecResult::Value(RelType::Str(path)) = self.evaluate(path_node) {
+                    if let Some(device) = &self.device {
+                        let obj = tobj::load_obj(
+                            &path,
+                            &tobj::LoadOptions {
+                                triangulate: true,
+                                single_index: true,
+                                ..Default::default()
+                            },
+                        );
+                        match obj {
+                            Ok((models, _)) => {
+                                let mesh = &models[0].mesh;
+
+                                #[repr(C)]
+                                #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+                                struct Vertex {
+                                    position: [f32; 3],
+                                    tex_coords: [f32; 2],
+                                    normal: [f32; 3],
+                                }
+
+                                let num_vertices = mesh.positions.len() / 3;
+                                let mut vertices = Vec::new();
+                                for i in 0..num_vertices {
+                                    let px = mesh.positions[i * 3];
+                                    let py = mesh.positions[i * 3 + 1];
+                                    let pz = mesh.positions[i * 3 + 2];
+                                    let u = if mesh.texcoords.len() > i * 2 {
+                                        mesh.texcoords[i * 2]
+                                    } else {
+                                        0.0
+                                    };
+                                    let v = if mesh.texcoords.len() > i * 2 + 1 {
+                                        mesh.texcoords[i * 2 + 1]
+                                    } else {
+                                        0.0
+                                    };
+                                    let nx = if mesh.normals.len() > i * 3 {
+                                        mesh.normals[i * 3]
+                                    } else {
+                                        0.0
+                                    };
+                                    let ny = if mesh.normals.len() > i * 3 + 1 {
+                                        mesh.normals[i * 3 + 1]
+                                    } else {
+                                        0.0
+                                    };
+                                    let nz = if mesh.normals.len() > i * 3 + 2 {
+                                        mesh.normals[i * 3 + 2]
+                                    } else {
+                                        0.0
+                                    };
+                                    vertices.push(Vertex {
+                                        position: [px, py, pz],
+                                        tex_coords: [u, v],
+                                        normal: [nx, ny, nz],
+                                    });
+                                }
+
+                                let vbo =
+                                    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                        label: Some("Mesh VBO"),
+                                        contents: bytemuck::cast_slice(&vertices),
+                                        usage: wgpu::BufferUsages::VERTEX,
+                                    });
+                                let ibo =
+                                    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                        label: Some("Mesh IBO"),
+                                        contents: bytemuck::cast_slice(&mesh.indices),
+                                        usage: wgpu::BufferUsages::INDEX,
+                                    });
+                                let id = self.meshes.len();
+                                self.meshes.push(MeshBuffers {
+                                    vbo,
+                                    ibo,
+                                    index_count: mesh.indices.len() as u32,
+                                });
+                                ExecResult::Value(RelType::Int(id as i64))
+                            }
+                            Err(e) => ExecResult::Fault(format!("LoadMesh failed: {}", e)),
+                        }
+                    } else {
+                        ExecResult::Fault("LoadMesh requires InitGraphics".to_string())
+                    }
+                } else {
+                    ExecResult::Fault("LoadMesh expects String path".to_string())
+                }
+            }
+            Node::LoadTexture(path_node) => {
+                if let ExecResult::Value(RelType::Str(path)) = self.evaluate(path_node) {
+                    if let (Some(device), Some(queue)) = (&self.device, &self.queue) {
+                        match image::open(&path) {
+                            Ok(img_dyn) => {
+                                let img = img_dyn.into_rgba8();
+                                let dimensions = img.dimensions();
+                                let texture_size = wgpu::Extent3d {
+                                    width: dimensions.0,
+                                    height: dimensions.1,
+                                    depth_or_array_layers: 1,
+                                };
+                                let texture = device.create_texture(&wgpu::TextureDescriptor {
+                                    label: Some("Texture"),
+                                    size: texture_size,
+                                    mip_level_count: 1,
+                                    sample_count: 1,
+                                    dimension: wgpu::TextureDimension::D2,
+                                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                                    usage: wgpu::TextureUsages::TEXTURE_BINDING
+                                        | wgpu::TextureUsages::COPY_DST,
+                                    view_formats: &[],
+                                });
+                                queue.write_texture(
+                                    wgpu::ImageCopyTexture {
+                                        texture: &texture,
+                                        mip_level: 0,
+                                        origin: wgpu::Origin3d::ZERO,
+                                        aspect: wgpu::TextureAspect::All,
+                                    },
+                                    &img,
+                                    wgpu::ImageDataLayout {
+                                        offset: 0,
+                                        bytes_per_row: Some(4 * dimensions.0),
+                                        rows_per_image: Some(dimensions.1),
+                                    },
+                                    texture_size,
+                                );
+                                let view =
+                                    texture.create_view(&wgpu::TextureViewDescriptor::default());
+                                let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+                                    address_mode_u: wgpu::AddressMode::ClampToEdge,
+                                    address_mode_v: wgpu::AddressMode::ClampToEdge,
+                                    address_mode_w: wgpu::AddressMode::ClampToEdge,
+                                    mag_filter: wgpu::FilterMode::Linear,
+                                    min_filter: wgpu::FilterMode::Linear,
+                                    mipmap_filter: wgpu::FilterMode::Linear,
+                                    ..Default::default()
+                                });
+
+                                let bind_group_layout = device.create_bind_group_layout(
+                                    &wgpu::BindGroupLayoutDescriptor {
+                                        entries: &[
+                                            wgpu::BindGroupLayoutEntry {
+                                                binding: 0,
+                                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                                ty: wgpu::BindingType::Texture {
+                                                    multisampled: false,
+                                                    view_dimension: wgpu::TextureViewDimension::D2,
+                                                    sample_type: wgpu::TextureSampleType::Float {
+                                                        filterable: true,
+                                                    },
+                                                },
+                                                count: None,
+                                            },
+                                            wgpu::BindGroupLayoutEntry {
+                                                binding: 1,
+                                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                                ty: wgpu::BindingType::Sampler(
+                                                    wgpu::SamplerBindingType::Filtering,
+                                                ),
+                                                count: None,
+                                            },
+                                        ],
+                                        label: Some("texture_bind_group_layout"),
+                                    },
+                                );
+
+                                let bind_group =
+                                    device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                        layout: &bind_group_layout,
+                                        entries: &[
+                                            wgpu::BindGroupEntry {
+                                                binding: 0,
+                                                resource: wgpu::BindingResource::TextureView(&view),
+                                            },
+                                            wgpu::BindGroupEntry {
+                                                binding: 1,
+                                                resource: wgpu::BindingResource::Sampler(&sampler),
+                                            },
+                                        ],
+                                        label: Some("diffuse_bind_group"),
+                                    });
+
+                                let id = self.textures.len();
+                                self.textures
+                                    .push((texture, view, bind_group, bind_group_layout));
+                                ExecResult::Value(RelType::Int(id as i64))
+                            }
+                            Err(e) => ExecResult::Fault(format!("LoadTexture failed: {}", e)),
+                        }
+                    } else {
+                        ExecResult::Fault("LoadTexture requires InitGraphics".to_string())
+                    }
+                } else {
+                    ExecResult::Fault("LoadTexture expects String path".to_string())
+                }
+            }
+            Node::PlayAudioFile(path_node) => {
+                if let ExecResult::Value(RelType::Str(path)) = self.evaluate(path_node) {
+                    if let Ok(mut reader) = hound::WavReader::open(path) {
+                        let spec = reader.spec();
+                        let samples: Vec<f32> = match spec.sample_format {
+                            hound::SampleFormat::Float => {
+                                reader.samples::<f32>().map(|s| s.unwrap_or(0.0)).collect()
+                            }
+                            hound::SampleFormat::Int => reader
+                                .samples::<i16>()
+                                .map(|s| (s.unwrap_or(0) as f32) / 32768.0)
+                                .collect(),
+                        };
+
+                        if let Some(stream_samples) = &self.stream_samples {
+                            let mut lock = stream_samples.lock().unwrap();
+                            *lock = samples;
+                            if let Some(pos) = &self.stream_pos {
+                                *pos.lock().unwrap() = 0;
+                            }
+                        }
+                        ExecResult::Value(RelType::Void)
+                    } else {
+                        ExecResult::Fault("PlayAudioFile failed to open wav".to_string())
+                    }
+                } else {
+                    ExecResult::Fault("PlayAudioFile expects String".to_string())
+                }
+            }
+            Node::RenderAsset(shader_node, mesh_node, tex_node, uniform_node) => {
+                let shader_val = self.evaluate(shader_node);
+                let mesh_val = self.evaluate(mesh_node);
+                let tex_val = self.evaluate(tex_node);
+                let uniform_val = self.evaluate(uniform_node);
+
+                if let (
+                    ExecResult::Value(RelType::Int(s_id)),
+                    ExecResult::Value(RelType::Int(m_id)),
+                    ExecResult::Value(RelType::Int(t_id)),
+                ) = (shader_val, mesh_val, tex_val)
+                {
+                    if let (Some(device), Some(queue), Some(surface), Some(config)) =
+                        (&self.device, &self.queue, &self.surface, &self.config)
+                    {
+                        if s_id < 0 || s_id as usize >= self.shaders.len() {
+                            return ExecResult::Fault("Invalid Shader ID".to_string());
+                        }
+                        if m_id < 0 || m_id as usize >= self.meshes.len() {
+                            return ExecResult::Fault("Invalid Mesh ID".to_string());
+                        }
+                        if t_id < 0 || t_id as usize >= self.textures.len() {
+                            return ExecResult::Fault("Invalid Texture ID".to_string());
+                        }
+
+                        let shader = &self.shaders[s_id as usize];
+                        let mesh = &self.meshes[m_id as usize];
+                        let texture_bind = &self.textures[t_id as usize];
+
+                        let uniform_bind_group_layout =
+                            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                                entries: &[wgpu::BindGroupLayoutEntry {
+                                    binding: 0,
+                                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                                    ty: wgpu::BindingType::Buffer {
+                                        ty: wgpu::BufferBindingType::Uniform,
+                                        has_dynamic_offset: false,
+                                        min_binding_size: None,
+                                    },
+                                    count: None,
+                                }],
+                                label: Some("uniform_bind_group_layout"),
+                            });
+
+                        let pipeline_layout =
+                            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                                label: None,
+                                bind_group_layouts: &[&uniform_bind_group_layout, &texture_bind.3],
+                                push_constant_ranges: &[],
+                            });
+
+                        let pipeline =
+                            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                                label: Some("Asset Pipeline"),
+                                layout: Some(&pipeline_layout),
+                                vertex: wgpu::VertexState {
+                                    module: shader,
+                                    entry_point: "vs_main",
+                                    buffers: &[wgpu::VertexBufferLayout {
+                                        array_stride: 32 as wgpu::BufferAddress,
+                                        step_mode: wgpu::VertexStepMode::Vertex,
+                                        attributes: &[
+                                            wgpu::VertexAttribute {
+                                                offset: 0,
+                                                shader_location: 0,
+                                                format: wgpu::VertexFormat::Float32x3,
+                                            },
+                                            wgpu::VertexAttribute {
+                                                offset: 12,
+                                                shader_location: 1,
+                                                format: wgpu::VertexFormat::Float32x2,
+                                            },
+                                            wgpu::VertexAttribute {
+                                                offset: 20,
+                                                shader_location: 2,
+                                                format: wgpu::VertexFormat::Float32x3,
+                                            },
+                                        ],
+                                    }],
+                                    compilation_options: wgpu::PipelineCompilationOptions::default(
+                                    ),
+                                },
+                                fragment: Some(wgpu::FragmentState {
+                                    module: shader,
+                                    entry_point: "fs_main",
+                                    targets: &[Some(wgpu::ColorTargetState {
+                                        format: config.format,
+                                        blend: Some(wgpu::BlendState::REPLACE),
+                                        write_mask: wgpu::ColorWrites::ALL,
+                                    })],
+                                    compilation_options: wgpu::PipelineCompilationOptions::default(
+                                    ),
+                                }),
+                                primitive: wgpu::PrimitiveState {
+                                    topology: wgpu::PrimitiveTopology::TriangleList,
+                                    strip_index_format: None,
+                                    front_face: wgpu::FrontFace::Ccw,
+                                    cull_mode: Some(wgpu::Face::Back),
+                                    unclipped_depth: false,
+                                    polygon_mode: wgpu::PolygonMode::Fill,
+                                    conservative: false,
+                                },
+                                depth_stencil: None, // Simplified for now, relies on ordering or simple scenes
+                                multisample: wgpu::MultisampleState::default(),
+                                multiview: None,
+                            });
+
+                        let mut active_bind_group = None;
+                        if let ExecResult::Value(RelType::Array(arr)) = uniform_val {
+                            let floats: Vec<f32> = arr
+                                .into_iter()
+                                .map(|v| match v {
+                                    RelType::Float(f) => f as f32,
+                                    RelType::Int(i) => i as f32,
+                                    _ => 0.0,
+                                })
+                                .collect();
+
+                            let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                                label: Some("Uniform Buffer"),
+                                size: (floats.len() * 4).max(64) as u64,
+                                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                                mapped_at_creation: false,
+                            });
+                            queue.write_buffer(&buffer, 0, bytemuck::cast_slice(&floats));
+
+                            active_bind_group =
+                                Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                    layout: &uniform_bind_group_layout,
+                                    entries: &[wgpu::BindGroupEntry {
+                                        binding: 0,
+                                        resource: buffer.as_entire_binding(),
+                                    }],
+                                    label: Some("uniform_bind_group"),
+                                }));
+                        }
+
+                        match surface.get_current_texture() {
+                            Ok(frame) => {
+                                let view = frame
+                                    .texture
+                                    .create_view(&wgpu::TextureViewDescriptor::default());
+                                let mut encoder = device.create_command_encoder(
+                                    &wgpu::CommandEncoderDescriptor::default(),
+                                );
+                                {
+                                    let mut rpass =
+                                        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                            label: Some("Render Pass"),
+                                            color_attachments: &[Some(
+                                                wgpu::RenderPassColorAttachment {
+                                                    view: &view,
+                                                    resolve_target: None,
+                                                    ops: wgpu::Operations {
+                                                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                                                            r: 0.1,
+                                                            g: 0.2,
+                                                            b: 0.3,
+                                                            a: 1.0,
+                                                        }),
+                                                        store: wgpu::StoreOp::Store,
+                                                    },
+                                                },
+                                            )],
+                                            depth_stencil_attachment: None,
+                                            timestamp_writes: None,
+                                            occlusion_query_set: None,
+                                        });
+                                    rpass.set_pipeline(&pipeline);
+
+                                    // Bind VBO & IBO
+                                    rpass.set_vertex_buffer(0, mesh.vbo.slice(..));
+                                    rpass.set_index_buffer(
+                                        mesh.ibo.slice(..),
+                                        wgpu::IndexFormat::Uint32,
+                                    );
+
+                                    // Bind Uniforms
+                                    if let Some(bg) = &active_bind_group {
+                                        rpass.set_bind_group(0, bg, &[]);
+                                    }
+
+                                    // Bind Texture (Group 1)
+                                    rpass.set_bind_group(1, &texture_bind.2, &[]);
+
+                                    rpass.draw_indexed(0..mesh.index_count, 0, 0..1);
+                                }
+                                queue.submit(Some(encoder.finish()));
+                                frame.present();
+                                ExecResult::Value(RelType::Void)
+                            }
+                            Err(e) => ExecResult::Fault(format!("RenderAsset failed: {:?}", e)),
+                        }
+                    } else {
+                        ExecResult::Fault("Graphics context not initialized".to_string())
+                    }
+                } else {
+                    ExecResult::Fault("RenderAsset expects (Int, Int, Int, Array)".to_string())
+                }
+            }
             Node::PollEvents(body) => {
                 if let Some(mut event_loop) = self.event_loop.take() {
                     use winit::platform::run_on_demand::EventLoopExtRunOnDemand;
@@ -798,21 +1247,36 @@ impl ExecutionEngine {
                     let voices = Arc::new(Mutex::new([VoiceState::default(); 4]));
                     self.voices = Some(voices.clone());
 
+                    let stream_samples = Arc::new(Mutex::new(Vec::<f32>::new()));
+                    let stream_pos = Arc::new(Mutex::new(0usize));
+                    self.stream_samples = Some(stream_samples.clone());
+                    self.stream_pos = Some(stream_pos.clone());
+
                     let err_fn =
                         |err| eprintln!("An error occurred on the output audio stream: {}", err);
 
                     let stream = match supported_config.sample_format() {
                         cpal::SampleFormat::F32 => {
+                            let stream_samples_clone = stream_samples.clone();
+                            let stream_pos_clone = stream_pos.clone();
                             device
                                 .build_output_stream(
                                     &config,
                                     move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                                         let mut voices_lock = voices.lock().unwrap();
+                                        let mut sample_idx = stream_pos_clone.lock().unwrap();
+                                        let samples_lock = stream_samples_clone.lock().unwrap();
+
                                         for frame in data.chunks_mut(channels) {
                                             let mut sample: f32 = 0.0;
+
+                                            if *sample_idx < samples_lock.len() {
+                                                sample += samples_lock[*sample_idx];
+                                                *sample_idx += 1;
+                                            }
+
                                             for voice in voices_lock.iter_mut() {
                                                 if voice.active {
-                                                    // Advance phase
                                                     voice.phase = (voice.phase
                                                         + voice.freq / sample_rate)
                                                         % 1.0;
@@ -838,7 +1302,7 @@ impl ExecutionEngine {
                                                         4 => rand::random::<f32>() * 2.0 - 1.0, // Noise
                                                         _ => 0.0,
                                                     };
-                                                    sample += v_sample * 0.15; // Volume scaling per voice
+                                                    sample += v_sample * 0.15; // Volume scaling
                                                 }
                                             }
                                             for channel in frame.iter_mut() {
@@ -852,13 +1316,24 @@ impl ExecutionEngine {
                                 .unwrap()
                         }
                         cpal::SampleFormat::I16 => {
+                            let stream_samples_clone = stream_samples.clone();
+                            let stream_pos_clone = stream_pos.clone();
                             device
                                 .build_output_stream(
                                     &config,
                                     move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
                                         let mut voices_lock = voices.lock().unwrap();
+                                        let mut sample_idx = stream_pos_clone.lock().unwrap();
+                                        let samples_lock = stream_samples_clone.lock().unwrap();
+
                                         for frame in data.chunks_mut(channels) {
                                             let mut sample: f32 = 0.0;
+
+                                            if *sample_idx < samples_lock.len() {
+                                                sample += samples_lock[*sample_idx];
+                                                *sample_idx += 1;
+                                            }
+
                                             for voice in voices_lock.iter_mut() {
                                                 if voice.active {
                                                     voice.phase = (voice.phase
@@ -867,26 +1342,26 @@ impl ExecutionEngine {
                                                     let p = voice.phase;
 
                                                     let v_sample = match voice.waveform {
-                                                        0 => (p * 2.0 * std::f32::consts::PI).sin(), // Sine
+                                                        0 => (p * 2.0 * std::f32::consts::PI).sin(),
                                                         1 => {
                                                             if p < 0.5 {
                                                                 1.0
                                                             } else {
                                                                 -1.0
                                                             }
-                                                        } // Square
-                                                        2 => (p * 2.0) - 1.0, // Saw
+                                                        }
+                                                        2 => (p * 2.0) - 1.0,
                                                         3 => {
                                                             if p < 0.5 {
                                                                 p * 4.0 - 1.0
                                                             } else {
                                                                 3.0 - p * 4.0
                                                             }
-                                                        } // Tri
-                                                        4 => rand::random::<f32>() * 2.0 - 1.0, // Noise
+                                                        }
+                                                        4 => rand::random::<f32>() * 2.0 - 1.0,
                                                         _ => 0.0,
                                                     };
-                                                    sample += v_sample * 0.15; // Volume scaling per voice
+                                                    sample += v_sample * 0.15;
                                                 }
                                             }
                                             let int_sample = (sample.max(-1.0).min(1.0)
@@ -903,13 +1378,24 @@ impl ExecutionEngine {
                                 .unwrap()
                         }
                         cpal::SampleFormat::U16 => {
+                            let stream_samples_clone = stream_samples.clone();
+                            let stream_pos_clone = stream_pos.clone();
                             device
                                 .build_output_stream(
                                     &config,
                                     move |data: &mut [u16], _: &cpal::OutputCallbackInfo| {
                                         let mut voices_lock = voices.lock().unwrap();
+                                        let mut sample_idx = stream_pos_clone.lock().unwrap();
+                                        let samples_lock = stream_samples_clone.lock().unwrap();
+
                                         for frame in data.chunks_mut(channels) {
                                             let mut sample: f32 = 0.0;
+
+                                            if *sample_idx < samples_lock.len() {
+                                                sample += samples_lock[*sample_idx];
+                                                *sample_idx += 1;
+                                            }
+
                                             for voice in voices_lock.iter_mut() {
                                                 if voice.active {
                                                     voice.phase = (voice.phase
@@ -918,26 +1404,26 @@ impl ExecutionEngine {
                                                     let p = voice.phase;
 
                                                     let v_sample = match voice.waveform {
-                                                        0 => (p * 2.0 * std::f32::consts::PI).sin(), // Sine
+                                                        0 => (p * 2.0 * std::f32::consts::PI).sin(),
                                                         1 => {
                                                             if p < 0.5 {
                                                                 1.0
                                                             } else {
                                                                 -1.0
                                                             }
-                                                        } // Square
-                                                        2 => (p * 2.0) - 1.0, // Saw
+                                                        }
+                                                        2 => (p * 2.0) - 1.0,
                                                         3 => {
                                                             if p < 0.5 {
                                                                 p * 4.0 - 1.0
                                                             } else {
                                                                 3.0 - p * 4.0
                                                             }
-                                                        } // Tri
-                                                        4 => rand::random::<f32>() * 2.0 - 1.0, // Noise
+                                                        }
+                                                        4 => rand::random::<f32>() * 2.0 - 1.0,
                                                         _ => 0.0,
                                                     };
-                                                    sample += v_sample * 0.15; // Volume scaling per voice
+                                                    sample += v_sample * 0.15;
                                                 }
                                             }
                                             let int_sample = ((sample.max(-1.0).min(1.0) * 0.5
@@ -955,13 +1441,24 @@ impl ExecutionEngine {
                                 .unwrap()
                         }
                         cpal::SampleFormat::U8 => {
+                            let stream_samples_clone = stream_samples.clone();
+                            let stream_pos_clone = stream_pos.clone();
                             device
                                 .build_output_stream(
                                     &config,
                                     move |data: &mut [u8], _: &cpal::OutputCallbackInfo| {
                                         let mut voices_lock = voices.lock().unwrap();
+                                        let mut sample_idx = stream_pos_clone.lock().unwrap();
+                                        let samples_lock = stream_samples_clone.lock().unwrap();
+
                                         for frame in data.chunks_mut(channels) {
                                             let mut sample: f32 = 0.0;
+
+                                            if *sample_idx < samples_lock.len() {
+                                                sample += samples_lock[*sample_idx];
+                                                *sample_idx += 1;
+                                            }
+
                                             for voice in voices_lock.iter_mut() {
                                                 if voice.active {
                                                     voice.phase = (voice.phase
@@ -970,26 +1467,26 @@ impl ExecutionEngine {
                                                     let p = voice.phase;
 
                                                     let v_sample = match voice.waveform {
-                                                        0 => (p * 2.0 * std::f32::consts::PI).sin(), // Sine
+                                                        0 => (p * 2.0 * std::f32::consts::PI).sin(),
                                                         1 => {
                                                             if p < 0.5 {
                                                                 1.0
                                                             } else {
                                                                 -1.0
                                                             }
-                                                        } // Square
-                                                        2 => (p * 2.0) - 1.0, // Saw
+                                                        }
+                                                        2 => (p * 2.0) - 1.0,
                                                         3 => {
                                                             if p < 0.5 {
                                                                 p * 4.0 - 1.0
                                                             } else {
                                                                 3.0 - p * 4.0
                                                             }
-                                                        } // Tri
-                                                        4 => rand::random::<f32>() * 2.0 - 1.0, // Noise
+                                                        }
+                                                        4 => rand::random::<f32>() * 2.0 - 1.0,
                                                         _ => 0.0,
                                                     };
-                                                    sample += v_sample * 0.15; // Volume scaling per voice
+                                                    sample += v_sample * 0.15;
                                                 }
                                             }
                                             let int_sample = ((sample.max(-1.0).min(1.0) * 0.5

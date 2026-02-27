@@ -58,6 +58,12 @@ pub enum Node {
     PlayNote(Box<Node>, Box<Node>, Box<Node>), // Channel, Frequency, Waveform
     StopNote(Box<Node>),                       // Channel
 
+    // Asset Pipeline (Sprint 7)
+    LoadMesh(Box<Node>),                                     // Path String
+    LoadTexture(Box<Node>),                                  // Path String
+    PlayAudioFile(Box<Node>),                                // Path String
+    RenderAsset(Box<Node>, Box<Node>, Box<Node>, Box<Node>), // Shader ID, Mesh ID, Texture ID, Uniform Matrix
+
     // Control Flow
     If(Box<Node>, Box<Node>, Option<Box<Node>>),
     While(Box<Node>, Box<Node>),

@@ -23,12 +23,19 @@ path = "src/bin/cube_gen.rs"
 name = "audio_test_gen"
 path = "src/bin/audio_test_gen.rs"
 
+[[bin]]
+name = "demo_scene_gen"
+path = "src/bin/demo_scene_gen.rs"
+
 [dependencies]
 bincode = "1.3.3"
-bytemuck = "1.25.0"
+bytemuck = { version = "1.25.0", features = ["derive"] }
 cpal = "0.17.3"
 pollster = "0.4.0"
 rand = "0.10.0"
 serde = { version = "1.0.228", features = ["derive"] }
 wgpu = "0.20"
 winit = "0.29"
+tobj = "4.0.2"
+image = "0.25.1"
+hound = "3.5.1"
