@@ -1,6 +1,5 @@
 use aether_compiler::ast::Node;
 use aether_compiler::executor::ExecutionEngine;
-use aether_compiler::llvm_codegen::LLVMGenerator;
 use aether_compiler::parser::Parser;
 use std::fs;
 use std::path::PathBuf;
@@ -24,31 +23,33 @@ macro_rules! aether_test {
         fn $name() {
             let ast: Node = $node;
 
-            // Output Bincode binary file
+            // Serialize current test to disk for the Meta-Compiler to read
             let bin = bincode::serialize(&ast).expect("Serialization failed");
             let mut path = get_out_dir();
-            path.push(format!("{}.aec", stringify!($name)));
+            path.push("current_test.aec");
             fs::write(&path, &bin).expect("Write failed");
 
             // Write expected output text file for test oracle validation
-            let mut expected_path = path.clone();
-            expected_path.set_extension("expected");
+            let mut expected_path = get_out_dir();
+            expected_path.push(format!("{}.expected", stringify!($name)));
             fs::write(&expected_path, $expected_info).unwrap();
 
-            // SPRINT 2: Read binary, Parse AST, Generate LLVM, Execute JIT, Verify Expectation.
-            let parsed_ast = Parser::parse_bytes(&bin).expect("Parser failed to read AST");
+            // SPRINT 3: Execute the Bootstrapping Meta-Circular-Compiler
+            let meta_bin = fs::read("target/self_hosting_compiler.aec")
+                .expect("Meta Compiler not found! Run cargo run --bin bootstrap_gen first!");
+            let meta_ast =
+                Parser::parse_bytes(&meta_bin).expect("Parser failed to read Meta Compiler AST");
 
-            // 1. Generate LLVM IR
-            let ir_text = LLVMGenerator::generate_ir(&parsed_ast);
-            let mut ll_path = path.clone();
-            ll_path.set_extension("ll");
-            fs::write(&ll_path, ir_text).unwrap();
-
-            // 2. Execute JIT Simulation via Engine
             let mut engine = ExecutionEngine::new();
-            let result = engine.execute(&parsed_ast);
+            engine.execute(&meta_ast); // Execute self_hosting_compiler.aec!
 
-            // 3. Verify exactly matching the expected output string
+            // The Meta Compiler writes its results to test_output.txt
+            let mut out_path = get_out_dir();
+            out_path.push("test_output.txt");
+            let result = fs::read_to_string(&out_path)
+                .unwrap_or_else(|_| "Fault: test_output.txt missing".to_string());
+
+            // Verify exactly matching the expected output string
             assert_eq!(
                 result,
                 $expected_info,

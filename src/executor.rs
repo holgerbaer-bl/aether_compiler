@@ -347,10 +347,52 @@ impl ExecutionEngine {
                         }
                         ExecResult::Value(RelType::Void)
                     }
+                    (ExecResult::Value(RelType::Str(path)), ExecResult::Value(RelType::Str(s))) => {
+                        if let Err(e) = std::fs::write(&path, s.as_bytes()) {
+                            return ExecResult::Fault(format!("FileWrite error: {}", e));
+                        }
+                        ExecResult::Value(RelType::Void)
+                    }
                     (ExecResult::Fault(err), _) | (_, ExecResult::Fault(err)) => {
                         ExecResult::Fault(err)
                     }
                     _ => ExecResult::Fault("FileWrite semantic error".to_string()),
+                }
+            }
+
+            // FFI / Reflection
+            Node::EvalBincodeNative(bytes_node) => match self.evaluate(bytes_node) {
+                ExecResult::Value(RelType::Array(arr)) => {
+                    let bytes: Vec<u8> = arr
+                        .into_iter()
+                        .map(|v| match v {
+                            RelType::Int(i) => i as u8,
+                            _ => 0,
+                        })
+                        .collect();
+
+                    match bincode::deserialize::<Node>(&bytes) {
+                        Ok(parsed) => {
+                            let mut sub_engine = ExecutionEngine::new();
+                            let output = sub_engine.execute(&parsed);
+                            ExecResult::Value(RelType::Str(output))
+                        }
+                        Err(e) => ExecResult::Fault(format!("Bincode Native Eval Fault: {}", e)),
+                    }
+                }
+                fault => fault,
+            },
+            Node::ToString(n) => {
+                match self.evaluate(n) {
+                    ExecResult::Value(v) => {
+                        let s = format!("{}", v);
+                        // Clean up type signatures "42 (i64)" -> "42" so it can be combined easily
+                        // Wait, no. We just use standard format. If it matches test output needs, it shouldn't have signatures.
+                        // Actually, our RelType::Display has signatures. The evaluator output string matches Display.
+                        // For building arbitrary strings to file we might need raw conversions, but we just want Display format for tests.
+                        ExecResult::Value(RelType::Str(s))
+                    }
+                    fault => fault,
                 }
             }
 

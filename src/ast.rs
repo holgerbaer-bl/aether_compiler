@@ -38,6 +38,10 @@ pub enum Node {
     FileRead(Box<Node>),
     FileWrite(Box<Node>, Box<Node>),
 
+    // FFI / Reflection
+    EvalBincodeNative(Box<Node>),
+    ToString(Box<Node>),
+
     // Control Flow
     If(Box<Node>, Box<Node>, Option<Box<Node>>),
     While(Box<Node>, Box<Node>),
