@@ -107,6 +107,58 @@ impl LLVMGenerator {
             Node::StringLiteral(v) => {
                 ir.push_str(&format!("{}; ptr @.{}\n", indent, v.replace("\"", "")))
             }
+            // V2 Extensions
+            Node::ArrayLiteral(items) => {
+                ir.push_str(&format!("{}; array alloc\n", indent));
+                for item in items {
+                    Self::traverse_ir(item, ir, depth);
+                }
+            }
+            Node::Index(container, idx) => {
+                Self::traverse_ir(container, ir, depth);
+                Self::traverse_ir(idx, ir, depth);
+                ir.push_str(&format!("{}%idx_res = getelementptr ...\n", indent));
+            }
+            Node::Concat(l, r) => {
+                Self::traverse_ir(l, ir, depth);
+                Self::traverse_ir(r, ir, depth);
+                ir.push_str(&format!("{}%concat_res = call @concat\n", indent));
+            }
+            Node::BitAnd(l, r) => {
+                Self::traverse_ir(l, ir, depth);
+                Self::traverse_ir(r, ir, depth);
+                ir.push_str(&format!("{}%and_res = and i64 %l, %r\n", indent));
+            }
+            Node::BitShiftLeft(l, r) => {
+                Self::traverse_ir(l, ir, depth);
+                Self::traverse_ir(r, ir, depth);
+                ir.push_str(&format!("{}%shl_res = shl i64 %l, %r\n", indent));
+            }
+            Node::BitShiftRight(l, r) => {
+                Self::traverse_ir(l, ir, depth);
+                Self::traverse_ir(r, ir, depth);
+                ir.push_str(&format!("{}%shr_res = lshr i64 %l, %r\n", indent));
+            }
+            Node::FnDef(name, _params, body) => {
+                ir.push_str(&format!("define void @{}(...) {{\n", name));
+                Self::traverse_ir(body, ir, depth + 1);
+                ir.push_str("  ret void\n}\n");
+            }
+            Node::Call(name, args) => {
+                for arg in args {
+                    Self::traverse_ir(arg, ir, depth);
+                }
+                ir.push_str(&format!("{}call @{}(...)\n", indent, name));
+            }
+            Node::FileRead(path) => {
+                Self::traverse_ir(path, ir, depth);
+                ir.push_str(&format!("{}call @file_read(...)\n", indent));
+            }
+            Node::FileWrite(path, data) => {
+                Self::traverse_ir(path, ir, depth);
+                Self::traverse_ir(data, ir, depth);
+                ir.push_str(&format!("{}call @file_write(...)\n", indent));
+            }
             _ => {
                 ir.push_str(&format!("{}; <unimplemented op>\n", indent));
             }

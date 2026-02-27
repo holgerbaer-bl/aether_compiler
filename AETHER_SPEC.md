@@ -16,6 +16,7 @@ AetherCore defines the following base types for AST values, managed as dynamical
 - **Float**: 64-bit floating point number (`f64`)
 - **Bool**: 8-bit boolean value (`true = 1`, `false = 0`)
 - **String**: UTF-8 string, prefixed with a 64-bit length identifier
+- **Array**: A dynamically sized list of values
 
 ## 4. AST Node Structures
 The AST consists of a single sum type `Node`, defined mathematically as follows:
@@ -38,7 +39,25 @@ Operations take a left-hand side (`lhs`) and right-hand side (`rhs`).
 *   **`Eq(Box<Node>, Box<Node>)`**: Logical equality comparison.
 *   **`Lt(Box<Node>, Box<Node>)`**: Less than comparison.
 
-### 4.4. Control Flow
+### 4.4. Functions and Scoping
+*   **`FnDef(String, Vec<String>, Box<Node>)`**: Defines a function. Identifier, parameter names, and body Block.
+*   **`Call(String, Vec<Node>)`**: Calls a function by identifier with arguments.
+
+### 4.5. Array & String Operations
+*   **`ArrayLiteral(Vec<Node>)`**: Instantiates a new array.
+*   **`Index(Box<Node>, Box<Node>)`**: Accesses an element in an array or string at a given index.
+*   **`Concat(Box<Node>, Box<Node>)`**: Concatenates two strings or two arrays.
+
+### 4.6. Bitwise Operations (for Serialization)
+*   **`BitAnd(Box<Node>, Box<Node>)`**: Bitwise AND on Ints.
+*   **`BitShiftLeft(Box<Node>, Box<Node>)`**: Left shift `<<` on Ints.
+*   **`BitShiftRight(Box<Node>, Box<Node>)`**: Right shift `>>` on Ints.
+
+### 4.7. File I/O
+*   **`FileRead(Box<Node>)`**: Reads a file by path. Returns file contents as an Array of Int bytes.
+*   **`FileWrite(Box<Node>, Box<Node>)`**: Writes an Array of Int bytes (arg 2) to a file path (arg 1).
+
+### 4.8. Control Flow
 *   **`If(Box<Node>, Box<Node>, Option<Box<Node>>)`**: Evaluates the first `Node` (Condition). If true, executes the second `Node` (Then Branch). Otherwise executes the third optional `Node` (Else Branch).
 *   **`While(Box<Node>, Box<Node>)`**: Evaluates the first `Node`. While true, repeatedly executes the second `Node` (Body block).
 *   **`Block(Vec<Node>)`**: Unconditionally executes a sequence of nodes in order. The block returns the value of its last node, or implicit void if empty.

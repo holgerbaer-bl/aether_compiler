@@ -532,3 +532,43 @@ aether_test!(
     ]),
     "Return: 120 (i64), Memory: fact = 120, n = 0"
 );
+
+// ------------------------------------------------------------------
+// Tests 51-54: V2 Sprint Bootstrapping Features (Arrays, Bitwise, Funcs)
+// ------------------------------------------------------------------
+aether_test!(
+    test_51_array_literal,
+    Node::ArrayLiteral(vec![Node::IntLiteral(1), Node::IntLiteral(2)]),
+    "Return: [1 (i64), 2 (i64)] (Array)"
+);
+
+aether_test!(
+    test_52_bitwise_ops,
+    Node::BitShiftLeft(Box::new(Node::IntLiteral(2)), Box::new(Node::IntLiteral(3))),
+    "Return: 16 (i64)"
+);
+
+aether_test!(
+    test_53_function_call,
+    Node::Block(vec![
+        Node::FnDef(
+            "double".to_string(),
+            vec!["x".to_string()],
+            Box::new(Node::Return(Box::new(Node::Add(
+                Box::new(Node::Identifier("x".to_string())),
+                Box::new(Node::Identifier("x".to_string()))
+            ))))
+        ),
+        Node::Call("double".to_string(), vec![Node::IntLiteral(21)])
+    ]),
+    "Return: 42 (i64), Memory: double = <fn>"
+);
+
+aether_test!(
+    test_54_string_concat,
+    Node::Concat(
+        Box::new(Node::StringLiteral("hello ".to_string())),
+        Box::new(Node::StringLiteral("world".to_string()))
+    ),
+    "Return: \"hello world\" (String)"
+);
