@@ -30,10 +30,17 @@ The repository includes a comprehensive Voxel rendering engine as a proof-of-con
 - A GPU compatible with Vulkan, Metal, or DX12.
 
 ### Execution
-To execute an AetherCore script:
+To execute the AetherCore Voxel Showcase:
 ```bash
-cargo run --bin run_aec <path_to_script.json>
+cargo run --bin run_aec examples/voxel/showcase_world.json
 ```
+
+### Repository Structure
+- `/src` - The core Rust compiler (`executor.rs`, `ast.rs`, etc.) and native modules (`/natives`).
+- `/examples` - Example AetherCore JSON files, including the voxel showcase (`/voxel`) and core features (`/core`).
+- `/tests` - Integration tests verifying AST execution and logic.
+- `/docs` - Documentation, JSON schemas (`aether_schema.json`), and specifications.
+- `/assets` - Textures and WGSL shaders.
 
 ---
 
@@ -61,6 +68,19 @@ Dieses Repository enthält eine Voxel-Engine als Proof-of-Concept. Dieser Showca
 - Echtzeit-Physik und AABB-Kollisionserkennung.
 - Fortschrittliche WGSL-Shader mit gerichteter Beleuchtung und Nebel-Effekten.
 - Prozedurale Geländegenerierung mittels nativem Perlin-Rauschen.
+
+### Ausführung
+Um den AetherCore Voxel Showcase auszuführen:
+```bash
+cargo run --bin run_aec examples/voxel/showcase_world.json
+```
+
+### Repository-Struktur
+- `/src` - Der Kern-Rust-Compiler (`executor.rs`, `ast.rs`, etc.) und native Module (`/natives`).
+- `/examples` - AetherCore JSON-Beispieldateien, einschließlich Voxel-Showcase (`/voxel`) und Kernfunktionen (`/core`).
+- `/tests` - Integrationstests zur Überprüfung der AST-Ausführung und Logik.
+- `/docs` - Dokumentation, JSON-Schemas (`aether_schema.json`) und Spezifikationen.
+- `/assets` - Texturen und WGSL-Shader.
 
 ---
 **Designed for Machine Intelligence. Powered by Rust.**

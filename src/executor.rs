@@ -1,7 +1,7 @@
 use crate::ast::Node;
+use crate::natives::NativeModule;
 use cgmath::InnerSpace;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use noise::{NoiseFn, Perlin};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -96,6 +96,7 @@ pub struct ExecutionEngine {
     pub depth_texture_view: Option<wgpu::TextureView>,
     pub shaders: Vec<wgpu::ShaderModule>,
     pub render_pipelines: HashMap<usize, wgpu::RenderPipeline>,
+    pub native_modules: Vec<Box<dyn NativeModule>>,
 
     // Voxel Engine (Sprint 12)
     pub camera_active: bool,
@@ -108,14 +109,22 @@ pub struct ExecutionEngine {
     pub input_s: bool,
     pub input_d: bool,
     pub input_space: bool,
+    pub input_shift: bool,
+    pub input_left_click: bool,
+
+    // Block interactions
+    pub interaction_active: bool,
+    pub selected_voxel_pos: Option<[i64; 3]>,
+    pub place_voxel_pos: Option<[i64; 3]>,
+
     pub voxel_pipeline: Option<wgpu::RenderPipeline>,
     pub voxel_vbo: Option<wgpu::Buffer>,
     pub voxel_ibo: Option<wgpu::Buffer>,
-    pub voxel_instances: Vec<[f32; 4]>,
+    pub voxel_instances: Vec<VoxelInstance>,
     pub voxel_bind_group: Option<wgpu::BindGroup>,
     pub voxel_atlas_bind_group: Option<wgpu::BindGroup>,
     pub voxel_ubo: Option<wgpu::Buffer>,
-    pub voxel_map: HashMap<[i32; 3], u32>,
+    pub voxel_map: HashMap<[i64; 3], u8>,
     pub voxel_map_active: bool,
     pub voxel_map_dirty: bool,
     pub interaction_enabled: bool,
@@ -165,7 +174,7 @@ pub enum ExecResult {
 
 impl ExecutionEngine {
     pub fn new() -> Self {
-        Self {
+        let mut engine = Self {
             memory: HashMap::new(),
             event_loop: None,
             window: None,
@@ -176,6 +185,7 @@ impl ExecutionEngine {
             depth_texture_view: None,
             shaders: Vec::new(),
             render_pipelines: HashMap::new(),
+            native_modules: Vec::new(),
             camera_active: false,
             camera_pos: [0.0, 1.0, 0.0],
             camera_yaw: 0.0,
@@ -186,6 +196,11 @@ impl ExecutionEngine {
             input_s: false,
             input_d: false,
             input_space: false,
+            input_shift: false,
+            input_left_click: false,
+            interaction_active: false,
+            selected_voxel_pos: None,
+            place_voxel_pos: None,
             voxel_pipeline: None,
             voxel_vbo: None,
             voxel_ibo: None,
@@ -217,7 +232,16 @@ impl ExecutionEngine {
             audio_stream_handle: None,
             samples: HashMap::new(),
             call_stack: Vec::new(),
-        }
+        };
+
+        engine
+            .native_modules
+            .push(Box::new(crate::natives::math::MathModule));
+        engine
+            .native_modules
+            .push(Box::new(crate::natives::io::IoModule));
+
+        engine
     }
 
     pub fn ensure_voxel_pipeline(&mut self) {
@@ -232,7 +256,7 @@ impl ExecutionEngine {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Voxel Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("voxel.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../assets/voxel.wgsl").into()),
         });
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -1085,148 +1109,12 @@ impl ExecutionEngine {
                     }
                 }
 
-                match func_name.as_str() {
-                    "Math.Random" => ExecResult::Value(RelType::Float(rand::random::<f64>())),
-                    "Math.Sin" => {
-                        if evaluated_args.len() != 1 {
-                            return ExecResult::Fault("Math.Sin expects 1 argument".to_string());
-                        }
-                        match evaluated_args[0] {
-                            RelType::Float(f) => ExecResult::Value(RelType::Float(f.sin())),
-                            RelType::Int(i) => ExecResult::Value(RelType::Float((i as f64).sin())),
-                            _ => ExecResult::Fault("Math.Sin expects a Number".to_string()),
-                        }
+                for module in &self.native_modules {
+                    if let Some(res) = module.handle(func_name, &evaluated_args) {
+                        return res;
                     }
-                    "Math.Cos" => {
-                        if evaluated_args.len() != 1 {
-                            return ExecResult::Fault("Math.Cos expects 1 argument".to_string());
-                        }
-                        match evaluated_args[0] {
-                            RelType::Float(f) => ExecResult::Value(RelType::Float(f.cos())),
-                            RelType::Int(i) => ExecResult::Value(RelType::Float((i as f64).cos())),
-                            _ => ExecResult::Fault("Math.Cos expects a Number".to_string()),
-                        }
-                    }
-                    "Math.Floor" => {
-                        if evaluated_args.len() != 1 {
-                            return ExecResult::Fault("Math.Floor expects 1 argument".to_string());
-                        }
-                        match evaluated_args[0] {
-                            RelType::Float(f) => ExecResult::Value(RelType::Float(f.floor())),
-                            RelType::Int(i) => ExecResult::Value(RelType::Int(i)),
-                            _ => ExecResult::Fault("Math.Floor expects a Number".to_string()),
-                        }
-                    }
-                    "Math.Ceil" => {
-                        if evaluated_args.len() != 1 {
-                            return ExecResult::Fault("Math.Ceil expects 1 argument".to_string());
-                        }
-                        match evaluated_args[0] {
-                            RelType::Float(f) => ExecResult::Value(RelType::Float(f.ceil())),
-                            RelType::Int(i) => ExecResult::Value(RelType::Int(i)),
-                            _ => ExecResult::Fault("Math.Ceil expects a Number".to_string()),
-                        }
-                    }
-                    "Math.Perlin2D" => {
-                        if evaluated_args.len() != 2 {
-                            return ExecResult::Fault(
-                                "Math.Perlin2D expects 2 arguments (x, y)".to_string(),
-                            );
-                        }
-                        let x = match evaluated_args[0] {
-                            RelType::Float(f) => f,
-                            RelType::Int(i) => i as f64,
-                            _ => {
-                                return ExecResult::Fault(
-                                    "Math.Perlin2D arg 1 must be a Number".to_string(),
-                                );
-                            }
-                        };
-                        let y = match evaluated_args[1] {
-                            RelType::Float(f) => f,
-                            RelType::Int(i) => i as f64,
-                            _ => {
-                                return ExecResult::Fault(
-                                    "Math.Perlin2D arg 2 must be a Number".to_string(),
-                                );
-                            }
-                        };
-                        let perlin = Perlin::new(1); // Explicit seed for stability
-                        let val = perlin.get([x, y]);
-                        ExecResult::Value(RelType::Float(val))
-                    }
-                    "IO.WriteFile" => {
-                        if evaluated_args.len() != 2 {
-                            return ExecResult::Fault(
-                                "IO.WriteFile expects 2 arguments (path, content)".to_string(),
-                            );
-                        }
-                        if let (RelType::Str(path), RelType::Str(content)) =
-                            (&evaluated_args[0], &evaluated_args[1])
-                        {
-                            match std::fs::write(path, content) {
-                                Ok(_) => ExecResult::Value(RelType::Bool(true)),
-                                Err(_) => ExecResult::Value(RelType::Bool(false)),
-                            }
-                        } else {
-                            ExecResult::Fault("IO.WriteFile expects (String, String)".to_string())
-                        }
-                    }
-                    "IO.ReadFile" => {
-                        if evaluated_args.len() != 1 {
-                            return ExecResult::Fault(
-                                "IO.ReadFile expects 1 argument (path)".to_string(),
-                            );
-                        }
-                        if let RelType::Str(path) = &evaluated_args[0] {
-                            match std::fs::read_to_string(path) {
-                                Ok(content) => ExecResult::Value(RelType::Str(content)),
-                                Err(_) => ExecResult::Value(RelType::Str("".to_string())),
-                            }
-                        } else {
-                            ExecResult::Fault("IO.ReadFile expects a String".to_string())
-                        }
-                    }
-                    "IO.AppendFile" => {
-                        if evaluated_args.len() != 2 {
-                            return ExecResult::Fault(
-                                "IO.AppendFile expects 2 arguments (path, content)".to_string(),
-                            );
-                        }
-                        if let (RelType::Str(path), RelType::Str(content)) =
-                            (&evaluated_args[0], &evaluated_args[1])
-                        {
-                            use std::io::Write;
-                            let mut file = match std::fs::OpenOptions::new()
-                                .append(true)
-                                .create(true)
-                                .open(path)
-                            {
-                                Ok(f) => f,
-                                Err(_) => return ExecResult::Value(RelType::Bool(false)),
-                            };
-                            match write!(file, "{}", content) {
-                                Ok(_) => ExecResult::Value(RelType::Bool(true)),
-                                Err(_) => ExecResult::Value(RelType::Bool(false)),
-                            }
-                        } else {
-                            ExecResult::Fault("IO.AppendFile expects (String, String)".to_string())
-                        }
-                    }
-                    "IO.FileExists" => {
-                        if evaluated_args.len() != 1 {
-                            return ExecResult::Fault(
-                                "IO.FileExists expects 1 argument (path)".to_string(),
-                            );
-                        }
-                        if let RelType::Str(path) = &evaluated_args[0] {
-                            ExecResult::Value(RelType::Bool(std::path::Path::new(path).exists()))
-                        } else {
-                            ExecResult::Fault("IO.FileExists expects a String".to_string())
-                        }
-                    }
-                    _ => ExecResult::Fault(format!("Unknown native function '{}'", func_name)),
                 }
+                ExecResult::Fault(format!("Unknown native function '{}'", func_name))
             }
 
             // I/O
@@ -2479,12 +2367,12 @@ impl ExecutionEngine {
                                     let mut collided_y = false;
 
                                     // Check feet area for Y collision
-                                    let foot_y = (new_pos[1] - player_height).floor() as i32;
-                                    let head_y = new_pos[1].floor() as i32;
+                                    let foot_y = (new_pos[1] - player_height).floor() as i64;
+                                    let head_y = new_pos[1].floor() as i64;
 
                                     // Simple Ground Check against Voxel Map
-                                    let check_x = new_pos[0].floor() as i32;
-                                    let check_z = new_pos[2].floor() as i32;
+                                    let check_x = new_pos[0].floor() as i64;
+                                    let check_z = new_pos[2].floor() as i64;
 
                                     if self
                                         .engine
@@ -2518,9 +2406,9 @@ impl ExecutionEngine {
                                     let try_x = new_pos[0] + dx;
                                     let try_z = new_pos[2] + dz;
 
-                                    let tx = try_x.floor() as i32;
-                                    let tz = try_z.floor() as i32;
-                                    let ty = (new_pos[1] - 0.5).floor() as i32; // Check body level
+                                    let tx = try_x.floor() as i64;
+                                    let tz = try_z.floor() as i64;
+                                    let ty = (new_pos[1] - 0.5).floor() as i64; // Check body level
 
                                     if !self.engine.voxel_map.contains_key(&[tx, ty, check_z]) {
                                         new_pos[0] = try_x;
@@ -2658,9 +2546,11 @@ impl ExecutionEngine {
                                         {
                                             self.engine.voxel_instances.clear();
                                             for (&[x, y, z], &id) in self.engine.voxel_map.iter() {
-                                                self.engine.voxel_instances.push([
-                                                    x as f32, y as f32, z as f32, id as f32,
-                                                ]);
+                                                self.engine.voxel_instances.push(VoxelInstance {
+                                                    instance_pos_and_id: [
+                                                        x as f32, y as f32, z as f32, id as f32,
+                                                    ],
+                                                });
                                             }
 
                                             // Rebuild the buffer
@@ -3234,8 +3124,11 @@ impl ExecutionEngine {
                                 RelType::Int(id),
                             ) = (&chunk[0], &chunk[1], &chunk[2], &chunk[3])
                             {
-                                self.voxel_instances
-                                    .push([*x as f32, *y as f32, *z as f32, *id as f32]);
+                                self.voxel_instances.push(VoxelInstance {
+                                    instance_pos_and_id: [
+                                        *x as f32, *y as f32, *z as f32, *id as f32,
+                                    ],
+                                });
                             }
                         }
                         self.voxel_map_dirty = true;
@@ -3252,7 +3145,7 @@ impl ExecutionEngine {
                                 ) = (&chunk[0], &chunk[1], &chunk[2], &chunk[3])
                                 {
                                     self.voxel_map
-                                        .insert([*x as i32, *y as i32, *z as i32], *id as u32);
+                                        .insert([*x as i64, *y as i64, *z as i64], *id as u8);
                                 }
                             }
                             self.voxel_map_dirty = true;
@@ -3462,23 +3355,23 @@ impl ExecutionEngine {
                 ) = (xr, yr, zr, idr)
                 {
                     let x = match xv {
-                        RelType::Int(i) => i as i32,
-                        RelType::Float(f) => f.floor() as i32,
+                        RelType::Int(i) => i as i64,
+                        RelType::Float(f) => f.floor() as i64,
                         _ => return ExecResult::Fault("SetVoxel X must be a Number".to_string()),
                     };
                     let y = match yv {
-                        RelType::Int(i) => i as i32,
-                        RelType::Float(f) => f.floor() as i32,
+                        RelType::Int(i) => i as i64,
+                        RelType::Float(f) => f.floor() as i64,
                         _ => return ExecResult::Fault("SetVoxel Y must be a Number".to_string()),
                     };
                     let z = match zv {
-                        RelType::Int(i) => i as i32,
-                        RelType::Float(f) => f.floor() as i32,
+                        RelType::Int(i) => i as i64,
+                        RelType::Float(f) => f.floor() as i64,
                         _ => return ExecResult::Fault("SetVoxel Z must be a Number".to_string()),
                     };
                     let id = match idv {
-                        RelType::Int(i) => i as u32,
-                        RelType::Float(f) => f.floor() as u32,
+                        RelType::Int(i) => i as u8,
+                        RelType::Float(f) => f.floor() as u8,
                         _ => return ExecResult::Fault("SetVoxel ID must be a Number".to_string()),
                     };
 
@@ -3534,10 +3427,10 @@ impl ExecutionEngine {
         origin: cgmath::Point3<f32>,
         direction: cgmath::Vector3<f32>,
         max_dist: f32,
-    ) -> Option<([i32; 3], [i32; 3])> {
-        let mut x = origin.x.floor() as i32;
-        let mut y = origin.y.floor() as i32;
-        let mut z = origin.z.floor() as i32;
+    ) -> Option<([i64; 3], [i64; 3])> {
+        let mut x = origin.x.floor() as i64;
+        let mut y = origin.y.floor() as i64;
+        let mut z = origin.z.floor() as i64;
 
         let step_x = if direction.x > 0.0 { 1 } else { -1 };
         let step_y = if direction.y > 0.0 { 1 } else { -1 };

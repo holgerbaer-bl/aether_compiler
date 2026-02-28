@@ -162,7 +162,7 @@ aether_test!(
 aether_test!(
     test_19_read_undefined,
     Node::Identifier("undeclared".to_string()),
-    "Fault: Undefined identifier"
+    "Fault: Undefined identifier: undeclared"
 );
 aether_test!(
     test_20_assign_undefined,
@@ -170,7 +170,7 @@ aether_test!(
         "y".to_string(),
         Box::new(Node::Identifier("undeclared".to_string()))
     ),
-    "Fault: Undefined identifier"
+    "Fault: Undefined identifier: undeclared"
 );
 
 // ------------------------------------------------------------------

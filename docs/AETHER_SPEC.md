@@ -176,6 +176,6 @@ The `run_aec` tool includes a built-in static analyzer that performs deep AST in
 ### 5.3. CLI Validation Mode
 Users can validate any script without executing it by using the `--check` flag:
 ```bash
-cargo run --bin run_aec -- --check <script.json>
+cargo run --bin run_aec -- --check examples/voxel/showcase_world.json
 ```
 If the script passes all checks, the tool outputs `Syntax OK`. Otherwise, it provides a detailed list of logical and structural errors.
