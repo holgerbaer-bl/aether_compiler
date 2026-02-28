@@ -24,7 +24,7 @@ pub enum Node {
     Eq(Box<Node>, Box<Node>),
     Lt(Box<Node>, Box<Node>),
 
-    // Arrays & Strings
+    // Arrays, Strings & Objects
     ArrayLiteral(Vec<Node>),
     ArrayGet(String, Box<Node>),            // Variable, Index
     ArraySet(String, Box<Node>, Box<Node>), // Variable, Index, Value
@@ -32,6 +32,10 @@ pub enum Node {
     ArrayLen(String),                       // Variable
     Index(Box<Node>, Box<Node>),            // General index (Expression based)
     Concat(Box<Node>, Box<Node>),
+
+    ObjectLiteral(std::collections::HashMap<String, Node>),
+    PropertyGet(Box<Node>, String), // Target Object, Property Name
+    PropertySet(Box<Node>, String, Box<Node>), // Target Object, Property Name, Value
 
     // Bitwise
     BitAnd(Box<Node>, Box<Node>),

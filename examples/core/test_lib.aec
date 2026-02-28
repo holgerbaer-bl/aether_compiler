@@ -2,6 +2,60 @@
   "Block": [
     {
       "FnDef": [
+        "Vector3",
+        [
+          "x",
+          "y",
+          "z"
+        ],
+        {
+          "Block": [
+            {
+              "Return": {
+                "ObjectLiteral": {
+                  "y": {
+                    "Identifier": "y"
+                  },
+                  "z": {
+                    "Identifier": "z"
+                  },
+                  "x": {
+                    "Identifier": "x"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "FnDef": [
+        "normalize_vector",
+        [
+          "v"
+        ],
+        {
+          "Block": [
+            {
+              "Return": {
+                "ExternCall": {
+                  "module": "test_lib",
+                  "function": "normalize_vector",
+                  "args": [
+                    {
+                      "Identifier": "v"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "FnDef": [
         "calculate_hash",
         [
           "data"

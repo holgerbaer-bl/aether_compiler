@@ -45,6 +45,8 @@ pub fn count_nodes(node: &Node) -> usize {
         | Node::ToString(val)
         | Node::LoadShader(val)
         | Node::PollEvents(val)
+        | Node::PropertyGet(val, _)
+        | Node::PropertySet(_, _, val)
         | Node::StopNote(val)
         | Node::LoadMesh(val)
         | Node::LoadTexture(val)
@@ -78,6 +80,11 @@ pub fn count_nodes(node: &Node) -> usize {
         | Node::NativeCall(_, nodes) => {
             for n in nodes {
                 count += count_nodes(n);
+            }
+        }
+        Node::ObjectLiteral(map) => {
+            for v in map.values() {
+                count += count_nodes(v);
             }
         }
         Node::ExternCall {
@@ -197,6 +204,18 @@ pub fn optimize(node: Node) -> Node {
         Node::ArrayLen(name) => Node::ArrayLen(name),
         Node::Index(arr, idx) => Node::Index(Box::new(optimize(*arr)), Box::new(optimize(*idx))),
         Node::Concat(l, r) => Node::Concat(Box::new(optimize(*l)), Box::new(optimize(*r))),
+
+        Node::ObjectLiteral(map) => {
+            let mut opt_map = std::collections::HashMap::new();
+            for (k, v) in map {
+                opt_map.insert(k, optimize(v));
+            }
+            Node::ObjectLiteral(opt_map)
+        }
+        Node::PropertyGet(obj, prop) => Node::PropertyGet(Box::new(optimize(*obj)), prop),
+        Node::PropertySet(obj, prop, val) => {
+            Node::PropertySet(Box::new(optimize(*obj)), prop, Box::new(optimize(*val)))
+        }
 
         Node::Return(val) => Node::Return(Box::new(optimize(*val))),
         Node::Sin(val) => Node::Sin(Box::new(optimize(*val))),
@@ -422,6 +441,8 @@ impl TypeChecker {
             Node::FloatLiteral(_) => Ok(Type::Float),
             Node::BoolLiteral(_) => Ok(Type::Bool),
             Node::StringLiteral(_) => Ok(Type::String),
+            Node::ObjectLiteral(_) => Ok(Type::Object),
+            Node::ArrayLiteral(_) => Ok(Type::Array),
             Node::Identifier(name) => {
                 if let Some(t) = self.get_var(name) {
                     Ok(t)

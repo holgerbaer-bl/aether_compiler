@@ -1,0 +1,83 @@
+{
+  "Block": [
+    { "Import": "examples/core/test_lib.aec" },
+
+    {
+      "Assign": [
+        "my_vec",
+        {
+          "Call": [
+            "Vector3",
+            [
+              { "FloatLiteral": 3.0 },
+              { "FloatLiteral": 4.0 },
+              { "FloatLiteral": 0.0 }
+            ]
+          ]
+        }
+      ]
+    },
+
+    { "Print": { "StringLiteral": "--- Complex FFI Struct Test ---" } },
+    { "Print": { "StringLiteral": "Input Vector:" } },
+    { "Print": { "Identifier": "my_vec" } },
+
+    {
+      "Assign": [
+        "normalized",
+        {
+          "Call": [
+            "normalize_vector",
+            [
+              { "Identifier": "my_vec" }
+            ]
+          ]
+        }
+      ]
+    },
+
+    { "Print": { "StringLiteral": "Normalized Vector:" } },
+    { "Print": { "Identifier": "normalized" } },
+
+    {
+      "Assign": [
+        "nx",
+        {
+          "PropertyGet": [
+            { "Identifier": "normalized" },
+            "x"
+          ]
+        }
+      ]
+    },
+    {
+      "Assign": [
+        "ny",
+        {
+          "PropertyGet": [
+            { "Identifier": "normalized" },
+            "y"
+          ]
+        }
+      ]
+    },
+    {
+      "Assign": [
+        "nz",
+        {
+          "PropertyGet": [
+            { "Identifier": "normalized" },
+            "z"
+          ]
+        }
+      ]
+    },
+
+    { "Print": { "StringLiteral": "X:" } },
+    { "Print": { "Identifier": "nx" } },
+    { "Print": { "StringLiteral": "Y:" } },
+    { "Print": { "Identifier": "ny" } },
+    { "Print": { "StringLiteral": "Z:" } },
+    { "Print": { "Identifier": "nz" } }
+  ]
+}

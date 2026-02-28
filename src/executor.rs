@@ -12,6 +12,7 @@ pub enum RelType {
     Bool(bool),
     Str(String),
     Array(Vec<RelType>),
+    Object(HashMap<String, RelType>),
     // Functions
     FnDef(String, Vec<String>, Box<Node>),
     Call(String, Vec<Node>),
@@ -30,6 +31,13 @@ impl std::fmt::Display for RelType {
             RelType::Array(v) => {
                 let s: Vec<String> = v.iter().map(|i| i.to_string()).collect();
                 write!(f, "[{}] (Array)", s.join(", "))
+            }
+            RelType::Object(map) => {
+                let mut s = Vec::new();
+                for (k, v) in map {
+                    s.push(format!("{}: {}", k, v));
+                }
+                write!(f, "{{{}}} (Object)", s.join(", "))
             }
             RelType::FnDef(_, _, _) => write!(f, "<Function>"),
             RelType::Call(_, _) => write!(f, "<Function Call>"),
@@ -582,15 +590,17 @@ impl ExecutionEngine {
                         RelType::Str(s) => format!("{} = \"{}\"", k, s),
                         RelType::Float(f) => format!("{} = {:?}", k, f),
                         RelType::Array(_) => format!("{} = [...]", k),
+                        RelType::Object(_) => format!("{} = {{...}}", k),
                         RelType::FnDef(_, _, _) => format!("{} = <fn>", k),
                         RelType::Call(_, _) => format!("{} = <fn call>", k),
+                        RelType::Void => format!("{} = void", k),
                         _ => format!(
                             "{} = {}",
                             k,
                             match v {
                                 RelType::Int(i) => i.to_string(),
                                 RelType::Bool(b) => b.to_string(),
-                                _ => unreachable!(),
+                                _ => format!("{}", v),
                             }
                         ),
                     }
@@ -838,10 +848,64 @@ impl ExecutionEngine {
                 }
             }
 
+            // Objects
+            Node::ObjectLiteral(map) => {
+                let mut obj = HashMap::new();
+                for (k, v) in map {
+                    match self.evaluate(v) {
+                        ExecResult::Value(val) => {
+                            obj.insert(k.clone(), val);
+                        }
+                        fault => return fault,
+                    }
+                }
+                ExecResult::Value(RelType::Object(obj))
+            }
+            Node::PropertyGet(obj_node, prop_name) => match self.evaluate(obj_node) {
+                ExecResult::Value(RelType::Object(obj)) => {
+                    if let Some(val) = obj.get(prop_name) {
+                        ExecResult::Value(val.clone())
+                    } else {
+                        ExecResult::Fault(format!("Property '{}' not found on Object", prop_name))
+                    }
+                }
+                ExecResult::Fault(err) => ExecResult::Fault(err),
+                _ => ExecResult::Fault("PropertyGet on non-object".to_string()),
+            },
+            Node::PropertySet(obj_node, prop_name, val_node) => {
+                let val = match self.evaluate(val_node) {
+                    ExecResult::Value(v) => v,
+                    fault => return fault,
+                };
+
+                // Because Aether variables are resolved by returning their values, mutating an object requires we look up its name.
+                // For PropertySet to actually mutate memory, it must know WHERE the object is.
+                // To keep this pure MVP sprint simple, if `obj_node` is an Identifier, we mutate memory directly.
+                match &**obj_node {
+                    Node::Identifier(var_name) => {
+                        let mut current_obj = match self.get_var(var_name) {
+                            Some(RelType::Object(o)) => o,
+                            _ => {
+                                return ExecResult::Fault(format!(
+                                    "Identifier '{}' is not an object",
+                                    var_name
+                                ));
+                            }
+                        };
+                        current_obj.insert(prop_name.clone(), val.clone());
+                        self.set_var(var_name.clone(), RelType::Object(current_obj));
+                        ExecResult::Value(val)
+                    }
+                    _ => ExecResult::Fault(
+                        "PropertySet must target an Identifier for now".to_string(),
+                    ),
+                }
+            }
+
             // Arrays & Strings
-            Node::ArrayLiteral(items) => {
+            Node::ArrayLiteral(nodes) => {
                 let mut vals = Vec::new();
-                for item in items {
+                for item in nodes {
                     match self.evaluate(item) {
                         ExecResult::Value(v) => vals.push(v),
                         fault => return fault,

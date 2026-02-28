@@ -50,3 +50,56 @@ A script simply `Import`s the generated specification, then routes logic implici
 ```
 
 The data flawlessly transfers from AetherCore memory, triggers natively over the FFI border returning execution safely backward into the managed script container boundaries.
+
+## 4. Complex Structs (Sprint 28)
+
+The Ingestor now supports `pub struct` definitions. When a Rust file contains:
+
+```rust
+pub struct Vector3 {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+}
+
+pub fn normalize_vector(v: Vector3) -> Vector3 { ... }
+```
+
+The ingestor generates:
+1. **Constructor Function** — `Vector3(x, y, z)` returning a `Node::ObjectLiteral` with the struct's fields mapped as key-value pairs inside a `RelType::Object(HashMap)`.
+2. **ExternCall Wrapper** — `normalize_vector(v)` remains an `ExternCall`, passing the Aether Object directly.
+
+### Struct Marshalling (bridge.rs)
+
+When the executor hits an `ExternCall` whose arguments include a `RelType::Object`, the bridge:
+1. **Validates** all required fields exist and have the correct types. Missing fields trigger a clean `[FFI Error]` runtime fault.
+2. **Unpacks** the HashMap into the native Rust struct (`Vector3 { x, y, z }`).
+3. **Executes** the native function.
+4. **Repacks** the returned struct back into a `RelType::Object(HashMap)`.
+
+### Property Access
+
+AetherCore scripts can read individual fields from returned objects using `PropertyGet`:
+
+```json
+{ "PropertyGet": [ { "Identifier": "normalized" }, "x" ] }
+```
+
+### Example
+
+```json
+{
+  "Block": [
+    { "Import": "examples/core/test_lib.aec" },
+    { "Assign": ["v", { "Call": ["Vector3", [
+        { "FloatLiteral": 3.0 },
+        { "FloatLiteral": 4.0 },
+        { "FloatLiteral": 0.0 }
+    ]]}]},
+    { "Assign": ["n", { "Call": ["normalize_vector", [{ "Identifier": "v" }]]}]},
+    { "Print": { "PropertyGet": [{ "Identifier": "n" }, "x"] }}
+  ]
+}
+```
+
+Output: `0.6 (f64)` — confirming the struct was marshalled to Rust, normalized, and the result unpacked back into AetherCore memory.

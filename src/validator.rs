@@ -46,9 +46,25 @@ impl Validator {
             | Node::Concat(l, r)
             | Node::BitAnd(l, r)
             | Node::BitShiftLeft(l, r)
-            | Node::BitShiftRight(l, r) => {
+            | Node::BitShiftRight(l, r)
+            | Node::FileWrite(l, r)
+            | Node::UIWindow(l, r)
+            | Node::LoadTextureAtlas(l, r)
+            | Node::LoadSample(l, r) => {
                 self.check_node(l);
                 self.check_node(r);
+            }
+            Node::ObjectLiteral(map) => {
+                for v in map.values() {
+                    self.check_node(v);
+                }
+            }
+            Node::PropertyGet(obj, _) => {
+                self.check_node(obj);
+            }
+            Node::PropertySet(obj, _, val) => {
+                self.check_node(obj);
+                self.check_node(val);
             }
             Node::Sin(n)
             | Node::Cos(n)
@@ -165,11 +181,7 @@ impl Validator {
                 self.check_node(idx);
                 self.check_node(val);
             }
-            Node::Index(target, idx)
-            | Node::FileWrite(target, idx)
-            | Node::UIWindow(target, idx)
-            | Node::LoadTextureAtlas(target, idx)
-            | Node::LoadSample(target, idx) => {
+            Node::Index(target, idx) => {
                 self.check_node(target);
                 self.check_node(idx);
             }

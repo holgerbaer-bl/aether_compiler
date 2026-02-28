@@ -32,6 +32,49 @@ impl BridgeModule for CoreBridge {
                         "greet_user expects 1 String argument".to_string(),
                     ))
                 }
+                "normalize_vector" => {
+                    if args.len() == 1 {
+                        if let RelType::Object(map) = &args[0] {
+                            let x = if let Some(RelType::Float(v)) = map.get("x") {
+                                *v
+                            } else {
+                                return Some(ExecResult::Fault(
+                                    "[FFI Error] normalize_vector missing required float field 'x'"
+                                        .to_string(),
+                                ));
+                            };
+                            let y = if let Some(RelType::Float(v)) = map.get("y") {
+                                *v
+                            } else {
+                                return Some(ExecResult::Fault(
+                                    "[FFI Error] normalize_vector missing required float field 'y'"
+                                        .to_string(),
+                                ));
+                            };
+                            let z = if let Some(RelType::Float(v)) = map.get("z") {
+                                *v
+                            } else {
+                                return Some(ExecResult::Fault(
+                                    "[FFI Error] normalize_vector missing required float field 'z'"
+                                        .to_string(),
+                                ));
+                            };
+
+                            let input_vec = crate::test_lib::Vector3 { x, y, z };
+                            let out_vec = crate::test_lib::normalize_vector(input_vec);
+
+                            let mut out_map = std::collections::HashMap::new();
+                            out_map.insert("x".to_string(), RelType::Float(out_vec.x));
+                            out_map.insert("y".to_string(), RelType::Float(out_vec.y));
+                            out_map.insert("z".to_string(), RelType::Float(out_vec.z));
+
+                            return Some(ExecResult::Value(RelType::Object(out_map)));
+                        }
+                    }
+                    Some(ExecResult::Fault(
+                        "normalize_vector expects 1 Vector3 Object argument".to_string(),
+                    ))
+                }
                 _ => None,
             }
         } else {
