@@ -9,7 +9,7 @@
                     "IntLiteral": 720
                 },
                 {
-                    "StringLiteral": "AetherCore: The World Smith"
+                    "StringLiteral": "AetherCore: Gravity & Biomes"
                 }
             ]
         },
@@ -22,6 +22,11 @@
         },
         {
             "EnableInteraction": {
+                "BoolLiteral": true
+            }
+        },
+        {
+            "EnablePhysics": {
                 "BoolLiteral": true
             }
         },
@@ -173,6 +178,60 @@
                                                 {
                                                     "Block": [
                                                         {
+                                                            "Assign": [
+                                                                "bid",
+                                                                {
+                                                                    "IntLiteral": 2
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "If": [
+                                                                {
+                                                                    "Lt": [
+                                                                        {
+                                                                            "Identifier": "y"
+                                                                        },
+                                                                        {
+                                                                            "IntLiteral": 2
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                {
+                                                                    "Assign": [
+                                                                        "bid",
+                                                                        {
+                                                                            "IntLiteral": 3
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                null
+                                                            ]
+                                                        },
+                                                        {
+                                                            "If": [
+                                                                {
+                                                                    "Lt": [
+                                                                        {
+                                                                            "Identifier": "y"
+                                                                        },
+                                                                        {
+                                                                            "IntLiteral": 0
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                {
+                                                                    "Assign": [
+                                                                        "bid",
+                                                                        {
+                                                                            "IntLiteral": 4
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                null
+                                                            ]
+                                                        },
+                                                        {
                                                             "SetVoxel": [
                                                                 {
                                                                     "Identifier": "x"
@@ -184,7 +243,7 @@
                                                                     "Identifier": "z"
                                                                 },
                                                                 {
-                                                                    "IntLiteral": 1
+                                                                    "Identifier": "bid"
                                                                 }
                                                             ]
                                                         },
@@ -205,6 +264,260 @@
                                                         }
                                                     ]
                                                 }
+                                            ]
+                                        },
+                                        {
+                                            "SetVoxel": [
+                                                {
+                                                    "Identifier": "x"
+                                                },
+                                                {
+                                                    "Identifier": "h"
+                                                },
+                                                {
+                                                    "Identifier": "z"
+                                                },
+                                                {
+                                                    "IntLiteral": 1
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "Assign": [
+                                                "tree_rng",
+                                                {
+                                                    "NativeCall": [
+                                                        "Math.Random",
+                                                        []
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "If": [
+                                                {
+                                                    "Lt": [
+                                                        {
+                                                            "FloatLiteral": 0.98
+                                                        },
+                                                        {
+                                                            "Identifier": "tree_rng"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "Block": [
+                                                        {
+                                                            "Assign": [
+                                                                "ty",
+                                                                {
+                                                                    "Add": [
+                                                                        {
+                                                                            "Identifier": "h"
+                                                                        },
+                                                                        {
+                                                                            "IntLiteral": 1
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "SetVoxel": [
+                                                                {
+                                                                    "Identifier": "x"
+                                                                },
+                                                                {
+                                                                    "Identifier": "ty"
+                                                                },
+                                                                {
+                                                                    "Identifier": "z"
+                                                                },
+                                                                {
+                                                                    "IntLiteral": 5
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "Assign": [
+                                                                "ty",
+                                                                {
+                                                                    "Add": [
+                                                                        {
+                                                                            "Identifier": "ty"
+                                                                        },
+                                                                        {
+                                                                            "IntLiteral": 1
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "SetVoxel": [
+                                                                {
+                                                                    "Identifier": "x"
+                                                                },
+                                                                {
+                                                                    "Identifier": "ty"
+                                                                },
+                                                                {
+                                                                    "Identifier": "z"
+                                                                },
+                                                                {
+                                                                    "IntLiteral": 5
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "Assign": [
+                                                                "ty",
+                                                                {
+                                                                    "Add": [
+                                                                        {
+                                                                            "Identifier": "ty"
+                                                                        },
+                                                                        {
+                                                                            "IntLiteral": 1
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "SetVoxel": [
+                                                                {
+                                                                    "Identifier": "x"
+                                                                },
+                                                                {
+                                                                    "Identifier": "ty"
+                                                                },
+                                                                {
+                                                                    "Identifier": "z"
+                                                                },
+                                                                {
+                                                                    "IntLiteral": 5
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "SetVoxel": [
+                                                                {
+                                                                    "Identifier": "x"
+                                                                },
+                                                                {
+                                                                    "Add": [
+                                                                        {
+                                                                            "Identifier": "ty"
+                                                                        },
+                                                                        {
+                                                                            "IntLiteral": 1
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                {
+                                                                    "Identifier": "z"
+                                                                },
+                                                                {
+                                                                    "IntLiteral": 6
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "SetVoxel": [
+                                                                {
+                                                                    "Add": [
+                                                                        {
+                                                                            "Identifier": "x"
+                                                                        },
+                                                                        {
+                                                                            "IntLiteral": 1
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                {
+                                                                    "Identifier": "ty"
+                                                                },
+                                                                {
+                                                                    "Identifier": "z"
+                                                                },
+                                                                {
+                                                                    "IntLiteral": 6
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "SetVoxel": [
+                                                                {
+                                                                    "Sub": [
+                                                                        {
+                                                                            "Identifier": "x"
+                                                                        },
+                                                                        {
+                                                                            "IntLiteral": 1
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                {
+                                                                    "Identifier": "ty"
+                                                                },
+                                                                {
+                                                                    "Identifier": "z"
+                                                                },
+                                                                {
+                                                                    "IntLiteral": 6
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "SetVoxel": [
+                                                                {
+                                                                    "Identifier": "x"
+                                                                },
+                                                                {
+                                                                    "Identifier": "ty"
+                                                                },
+                                                                {
+                                                                    "Add": [
+                                                                        {
+                                                                            "Identifier": "z"
+                                                                        },
+                                                                        {
+                                                                            "IntLiteral": 1
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                {
+                                                                    "IntLiteral": 6
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "SetVoxel": [
+                                                                {
+                                                                    "Identifier": "x"
+                                                                },
+                                                                {
+                                                                    "Identifier": "ty"
+                                                                },
+                                                                {
+                                                                    "Sub": [
+                                                                        {
+                                                                            "Identifier": "z"
+                                                                        },
+                                                                        {
+                                                                            "IntLiteral": 1
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                {
+                                                                    "IntLiteral": 6
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                null
                                             ]
                                         },
                                         {

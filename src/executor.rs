@@ -107,6 +107,7 @@ pub struct ExecutionEngine {
     pub input_a: bool,
     pub input_s: bool,
     pub input_d: bool,
+    pub input_space: bool,
     pub voxel_pipeline: Option<wgpu::RenderPipeline>,
     pub voxel_vbo: Option<wgpu::Buffer>,
     pub voxel_ibo: Option<wgpu::Buffer>,
@@ -118,6 +119,9 @@ pub struct ExecutionEngine {
     pub voxel_map_active: bool,
     pub voxel_map_dirty: bool,
     pub interaction_enabled: bool,
+    pub physics_enabled: bool,
+    pub velocity_y: f32,
+    pub is_grounded: bool,
     pub voxel_instance_buffer: Option<wgpu::Buffer>,
 
     // Asset pipeline state
@@ -181,6 +185,7 @@ impl ExecutionEngine {
             input_a: false,
             input_s: false,
             input_d: false,
+            input_space: false,
             voxel_pipeline: None,
             voxel_vbo: None,
             voxel_ibo: None,
@@ -192,6 +197,9 @@ impl ExecutionEngine {
             voxel_map_active: false,
             voxel_map_dirty: true,
             interaction_enabled: false,
+            physics_enabled: false,
+            velocity_y: 0.0,
+            is_grounded: false,
             voxel_instance_buffer: None,
             meshes: Vec::new(),
             textures: Vec::new(),
@@ -2193,6 +2201,7 @@ impl ExecutionEngine {
                                             "a" | "A" => self.engine.input_a = is_pressed,
                                             "s" | "S" => self.engine.input_s = is_pressed,
                                             "d" | "D" => self.engine.input_d = is_pressed,
+                                            " " => self.engine.input_space = is_pressed,
                                             _ => {}
                                         }
                                     }
@@ -2350,8 +2359,103 @@ impl ExecutionEngine {
                                     dx += cy * speed;
                                     dz -= sy * speed;
                                 }
-                                self.engine.camera_pos[0] += dx;
-                                self.engine.camera_pos[2] += dz;
+
+                                if self.engine.physics_enabled {
+                                    // Apply Gravity
+                                    self.engine.velocity_y -= 0.008;
+
+                                    // Handle Jump (Spacebar)
+                                    if self.engine.input_space && self.engine.is_grounded {
+                                        self.engine.velocity_y = 0.15;
+                                        self.engine.is_grounded = false;
+
+                                        // Jump Sound Feedback (Sample ID 1)
+                                        if let Some((_, handle)) = &self.engine.audio_stream_handle
+                                        {
+                                            if let Some(sample_bytes) = self.engine.samples.get(&1)
+                                            {
+                                                let cursor =
+                                                    std::io::Cursor::new(sample_bytes.clone());
+                                                if let Ok(source) = rodio::Decoder::new(cursor) {
+                                                    use rodio::Source;
+                                                    let source = source.amplify(0.5).speed(1.2);
+                                                    let _ =
+                                                        handle.play_raw(source.convert_samples());
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Apply Physics-Based Movement with AABB Collision
+                                if self.engine.physics_enabled {
+                                    let mut new_pos = self.engine.camera_pos;
+
+                                    // 1. Move Y (Gravity/Jump)
+                                    new_pos[1] += self.engine.velocity_y;
+
+                                    // Collision Y
+                                    let player_height = 1.6;
+                                    let _player_radius = 0.3;
+                                    let mut collided_y = false;
+
+                                    // Check feet area for Y collision
+                                    let foot_y = (new_pos[1] - player_height).floor() as i32;
+                                    let head_y = new_pos[1].floor() as i32;
+
+                                    // Simple Ground Check against Voxel Map
+                                    let check_x = new_pos[0].floor() as i32;
+                                    let check_z = new_pos[2].floor() as i32;
+
+                                    if self
+                                        .engine
+                                        .voxel_map
+                                        .contains_key(&[check_x, foot_y, check_z])
+                                    {
+                                        if self.engine.velocity_y < 0.0 {
+                                            new_pos[1] = (foot_y + 1) as f32 + player_height;
+                                            self.engine.velocity_y = 0.0;
+                                            self.engine.is_grounded = true;
+                                            collided_y = true;
+                                        }
+                                    } else {
+                                        self.engine.is_grounded = false;
+                                    }
+
+                                    // Ceiling check
+                                    if !collided_y
+                                        && self
+                                            .engine
+                                            .voxel_map
+                                            .contains_key(&[check_x, head_y, check_z])
+                                    {
+                                        if self.engine.velocity_y > 0.0 {
+                                            new_pos[1] = head_y as f32 - 0.1;
+                                            self.engine.velocity_y = 0.0;
+                                        }
+                                    }
+
+                                    // 2. Move X & Z (WASD) - Only if not colliding
+                                    let try_x = new_pos[0] + dx;
+                                    let try_z = new_pos[2] + dz;
+
+                                    let tx = try_x.floor() as i32;
+                                    let tz = try_z.floor() as i32;
+                                    let ty = (new_pos[1] - 0.5).floor() as i32; // Check body level
+
+                                    if !self.engine.voxel_map.contains_key(&[tx, ty, check_z]) {
+                                        new_pos[0] = try_x;
+                                    }
+                                    if !self.engine.voxel_map.contains_key(&[check_x, ty, tz]) {
+                                        new_pos[2] = try_z;
+                                    }
+
+                                    self.engine.camera_pos = new_pos;
+                                } else {
+                                    // Noclip Movement (Sprint 17 style)
+                                    self.engine.camera_pos[0] += dx;
+                                    self.engine.camera_pos[2] += dz;
+                                }
                             }
 
                             let egui_ctx = self.engine.egui_ctx.clone();
@@ -3320,6 +3424,15 @@ impl ExecutionEngine {
                     }
                 }
                 ExecResult::Value(last_val)
+            }
+            Node::EnablePhysics(enable_n) => {
+                let res = self.evaluate(enable_n);
+                if let ExecResult::Value(RelType::Bool(b)) = res {
+                    self.physics_enabled = b;
+                    ExecResult::Value(RelType::Void)
+                } else {
+                    ExecResult::Fault("EnablePhysics expects Boolean".to_string())
+                }
             }
             Node::Return(val_node) => match self.evaluate(val_node) {
                 ExecResult::Value(v) => ExecResult::ReturnBlockInfo(v),

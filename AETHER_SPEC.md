@@ -97,8 +97,13 @@ Switches the voxel renderer from static instance arrays to a persistent, mutable
 Activates 3D raycasting (DDA algorithm) and mouse input listeners. Left-click breaks blocks (Mining), Right-click places blocks (Building).
 *   **Structure:** `{"EnableInteraction": [{"BoolLiteral": <true/false>}]}`
 
+#### `EnablePhysics`
+Activates real-time player physics, including gravity, AABB collision against the Voxel Map, and jumping (Spacebar).
+*   **Structure:** `{"EnablePhysics": [{"BoolLiteral": <true/false>}]}`
+
 #### `SetVoxel`
 Directly modifies the persistent Voxel Map at the specified coordinates.
+*   **Standard Block IDs:** 1: Grass, 2: Stone, 3: Sand, 4: Water, 5: Wood, 6: Leaves.
 *   **Structure:** `{"SetVoxel": [<X>, <Y>, <Z>, <BlockID>]}`
 
 #### `LoadSample`

@@ -90,7 +90,7 @@ pub enum Node {
     InitVoxelMap,             // Transfers Voxel control to a mutable HashMap
     SetVoxel(Box<Node>, Box<Node>, Box<Node>, Box<Node>), // X, Y, Z, ID
     EnableInteraction(Box<Node>), // Boolean (True): Activates Raycasting & Mouse Mapping
-
+    EnablePhysics(Box<Node>), // Boolean (True): Activates Gravity & Collision
     // Control Flow
     If(Box<Node>, Box<Node>, Option<Box<Node>>),
     While(Box<Node>, Box<Node>),
