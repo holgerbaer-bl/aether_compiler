@@ -1,4 +1,4 @@
-use aether_compiler::ast::Node;
+use knoten_core::ast::Node;
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -115,18 +115,18 @@ fn main() {
 
     let content = fs::read_to_string(input_path).expect("Failed to read input rust file");
 
-    let aether_ast = parse_rust_file(&content, module_name);
+    let knoten_ast = parse_rust_file(&content, module_name);
 
-    let json_output = serde_json::to_string_pretty(&aether_ast).expect("Failed to serialize AST");
+    let json_output = serde_json::to_string_pretty(&knoten_ast).expect("Failed to serialize AST");
 
-    let output_filename = format!("{}.aec", module_name);
+    let output_filename = format!("{}.nod", module_name);
     // Placed directly alongside the demos for integration evaluations
     let output_path = Path::new("examples/core").join(&output_filename);
 
     fs::write(&output_path, json_output).expect("Failed to write FFI interface");
 
     println!(
-        "[Rust-Ingestor] Successfully generated FFI AetherCore binary: {:?}",
+        "[Rust-Ingestor] Successfully generated FFI KnotenCore binary: {:?}",
         output_path
     );
 }

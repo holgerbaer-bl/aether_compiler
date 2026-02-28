@@ -1,10 +1,10 @@
-# AetherCore Rust-Ingestor Architecture (FFI Automation)
+# KnotenCore Rust-Ingestor Architecture (FFI Automation)
 
-**Sprint 27: The Rust-Connector Automation** introduces autonomous expansion mechanics for AetherCore. By deploying an ingestion framework over the engine, Aether logic can absorb natively compiled external programs.
+**Sprint 27: The Rust-Connector Automation** introduces autonomous expansion mechanics for KnotenCore. By deploying an ingestion framework over the engine, Aether logic can absorb natively compiled external programs.
 
 ## 1. The `rust_ingest` Pipeline
 
-AetherCore features a standalone AST extraction tool placed at `src/bin/rust_ingest.rs`. 
+KnotenCore features a standalone AST extraction tool placed at `src/bin/rust_ingest.rs`. 
 This pipeline reads arbitrary `.rs` language files and attempts to digest externally mapped functions, automating the creation of strictly-typed bridging headers (`ExternCall`).
 
 ### Execution
@@ -15,11 +15,11 @@ cargo run --bin rust_ingest src/test_lib.rs
 ### Process
 1. **Targeting**: The ingestion pipeline queries the target Rust file for `pub fn <name>(<args>) -> <type>` declarations.
 2. **Translation**: The arguments and structural layout are converted natively into Aether's Abstract Syntax Tree via the `Node::ExternCall` wrapper.
-3. **Module Generation**: An `.aec` (Aether Executable Core) header JSON artifact is rendered to disk matching the target library's namespace.
+3. **Module Generation**: An `.nod` (Aether Executable Core) header JSON artifact is rendered to disk matching the target library's namespace.
 
 ## 2. The Native Execution Bridge (`bridge.rs`)
 
-When an AetherCore script calls `Import("test_lib.aec")`, it loads generated `ExternCall` nodes into its execution tree.
+When an KnotenCore script calls `Import("test_lib.nod")`, it loads generated `ExternCall` nodes into its execution tree.
 
 1. **Routing Strategy**: The interpreter triggers a context boundary swap during evaluate when hitting `ExternCall` matching structural traits.
 2. **Registry Mapping**: A physical `BridgeModule` defined within the compiler source structure attempts to dynamically look up the ingested logic. 
@@ -31,7 +31,7 @@ A script simply `Import`s the generated specification, then routes logic implici
 ```json
 {
   "Block": [
-    { "Import": "examples/core/test_lib.aec" },
+    { "Import": "examples/core/test_lib.nod" },
     {
       "Assign": [
         "hash_value",
@@ -49,7 +49,7 @@ A script simply `Import`s the generated specification, then routes logic implici
 }
 ```
 
-The data flawlessly transfers from AetherCore memory, triggers natively over the FFI border returning execution safely backward into the managed script container boundaries.
+The data flawlessly transfers from KnotenCore memory, triggers natively over the FFI border returning execution safely backward into the managed script container boundaries.
 
 ## 4. Complex Structs (Sprint 28)
 
@@ -79,7 +79,7 @@ When the executor hits an `ExternCall` whose arguments include a `RelType::Objec
 
 ### Property Access
 
-AetherCore scripts can read individual fields from returned objects using `PropertyGet`:
+KnotenCore scripts can read individual fields from returned objects using `PropertyGet`:
 
 ```json
 { "PropertyGet": [ { "Identifier": "normalized" }, "x" ] }
@@ -90,7 +90,7 @@ AetherCore scripts can read individual fields from returned objects using `Prope
 ```json
 {
   "Block": [
-    { "Import": "examples/core/test_lib.aec" },
+    { "Import": "examples/core/test_lib.nod" },
     { "Assign": ["v", { "Call": ["Vector3", [
         { "FloatLiteral": 3.0 },
         { "FloatLiteral": 4.0 },
@@ -102,4 +102,4 @@ AetherCore scripts can read individual fields from returned objects using `Prope
 }
 ```
 
-Output: `0.6 (f64)` — confirming the struct was marshalled to Rust, normalized, and the result unpacked back into AetherCore memory.
+Output: `0.6 (f64)` — confirming the struct was marshalled to Rust, normalized, and the result unpacked back into KnotenCore memory.

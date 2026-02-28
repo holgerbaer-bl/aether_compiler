@@ -770,7 +770,7 @@ impl ExecutionEngine {
                 let title_val = self.evaluate(title);
                 let title_str = match title_val {
                     ExecResult::Value(RelType::Str(s)) => s,
-                    _ => "Aether Window".to_string(),
+                    _ => "Knoten Window".to_string(),
                 };
                 if let Some(ctx) = self.egui_ctx.clone() {
                     egui::Window::new(title_str).show(&ctx, |ui| {
@@ -884,7 +884,7 @@ impl ExecutionEngine {
                     fault => return fault,
                 };
 
-                // Because Aether variables are resolved by returning their values, mutating an object requires we look up its name.
+                // Because Knoten variables are resolved by returning their values, mutating an object requires we look up its name.
                 // For PropertySet to actually mutate memory, it must know WHERE the object is.
                 // To keep this pure MVP sprint simple, if `obj_node` is an Identifier, we mutate memory directly.
                 match &**obj_node {
@@ -1464,7 +1464,7 @@ impl ExecutionEngine {
                 if let ExecResult::Value(RelType::Str(code)) = self.evaluate(code_node) {
                     if let Some(device) = &self.device {
                         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                            label: Some("AetherShader"),
+                            label: Some("KnotenShader"),
                             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(code)),
                         });
                         let id = self.shaders.len();
@@ -2214,13 +2214,13 @@ impl ExecutionEngine {
                     use winit::platform::run_on_demand::EventLoopExtRunOnDemand;
                     use winit::window::WindowId;
 
-                    struct AetherApp<'a> {
+                    struct KnotenApp<'a> {
                         engine: &'a mut ExecutionEngine,
                         body: &'a Node,
                         exit: bool,
                     }
 
-                    impl<'a> ApplicationHandler for AetherApp<'a> {
+                    impl<'a> ApplicationHandler for KnotenApp<'a> {
                         fn resumed(&mut self, _event_loop: &ActiveEventLoop) {}
 
                         fn window_event(
@@ -2804,7 +2804,7 @@ impl ExecutionEngine {
                         }
                     }
 
-                    let mut app = AetherApp {
+                    let mut app = KnotenApp {
                         engine: self,
                         body,
                         exit: false,

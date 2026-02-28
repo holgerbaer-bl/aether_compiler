@@ -1,9 +1,9 @@
-use aether_compiler::ast::Node;
+use knoten_core::ast::Node;
 use std::fs;
 use std::path::PathBuf;
 
 fn main() {
-    println!("Building AetherCore Standard Library...");
+    println!("Building KnotenCore Standard Library...");
 
     // Create stdlib directory
     let mut stdlib_dir = std::env::current_dir().unwrap();
@@ -258,12 +258,12 @@ fn main() {
                 ),
             ])),
         ),
-        // String.FormatLog(msg) -> concat("[AetherCore] ", msg)
+        // String.FormatLog(msg) -> concat("[KnotenCore] ", msg)
         Node::FnDef(
             "String.FormatLog".to_string(),
             vec!["msg".to_string()],
             Box::new(Node::Return(Box::new(Node::Concat(
-                Box::new(Node::StringLiteral("[AetherCore] ".to_string())),
+                Box::new(Node::StringLiteral("[KnotenCore] ".to_string())),
                 Box::new(Node::Identifier("msg".to_string())),
             )))),
         ),
@@ -273,9 +273,9 @@ fn main() {
     // 4. stdlib_demo.aec
     // ---------------------------------------------------------
     let stdlib_demo_ast = Node::Block(vec![
-        Node::Import("stdlib/array_utils.aec".to_string()),
-        Node::Import("stdlib/math_ext.aec".to_string()),
-        Node::Import("stdlib/string_utils.aec".to_string()),
+        Node::Import("stdlib/array_utils.nod".to_string()),
+        Node::Import("stdlib/math_ext.nod".to_string()),
+        Node::Import("stdlib/string_utils.nod".to_string()),
         // Print FormatLog
         Node::Print(Box::new(Node::Call(
             "String.FormatLog".to_string(),
@@ -326,14 +326,14 @@ fn main() {
         println!("Saved {:?}", path);
     };
 
-    save_file(&stdlib_dir, "array_utils.aec", &array_utils_ast);
-    save_file(&stdlib_dir, "math_ext.aec", &math_ext_ast);
-    save_file(&stdlib_dir, "string_utils.aec", &string_utils_ast);
+    save_file(&stdlib_dir, "array_utils.nod", &array_utils_ast);
+    save_file(&stdlib_dir, "math_ext.nod", &math_ext_ast);
+    save_file(&stdlib_dir, "string_utils.nod", &string_utils_ast);
 
     let mut examples_dir = std::env::current_dir().unwrap();
     examples_dir.push("examples");
     examples_dir.push("core");
-    save_file(&examples_dir, "stdlib_demo.aec", &stdlib_demo_ast);
+    save_file(&examples_dir, "stdlib_demo.nod", &stdlib_demo_ast);
 
     println!("ASL Generation Complete!");
 }

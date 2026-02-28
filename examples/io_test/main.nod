@@ -1,6 +1,6 @@
 {
     "Block": [
-        { "Import": "examples/io_test/logger.aec" },
+        { "Import": "examples/io_test/logger.nod" },
         {
             "Call": [
                 "Log",

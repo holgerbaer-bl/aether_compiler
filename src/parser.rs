@@ -5,7 +5,7 @@ use std::io::Error as IoError;
 pub struct Parser;
 
 impl Parser {
-    /// Loads a compiled AetherCore AST from a JSON file on disk.
+    /// Loads a compiled KnotenCore AST from a JSON file on disk.
     pub fn parse_file(path: &str) -> Result<Node, String> {
         let text_data =
             fs::read(path).map_err(|e: IoError| format!("Failed to read file {}: {}", path, e))?;

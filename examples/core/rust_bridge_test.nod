@@ -1,6 +1,6 @@
 {
   "Block": [
-    { "Import": "examples/core/test_lib.aec" },
+    { "Import": "examples/core/test_lib.nod" },
     {
       "Assign": [
         "greeting",
@@ -22,7 +22,7 @@
           "Call": [
             "calculate_hash",
             [
-              { "StringLiteral": "AetherCore is now Autonomous!" }
+              { "StringLiteral": "KnotenCore is now Autonomous!" }
             ]
           ]
         }

@@ -1,6 +1,6 @@
 {
   "Block": [
-    { "Import": "examples/core/test_lib.aec" },
+    { "Import": "examples/core/test_lib.nod" },
 
     {
       "Assign": [

@@ -1,19 +1,19 @@
-# AetherCore Binary AST Specification (v1.0)
+# KnotenCore Binary AST Specification (v1.0)
 
-AetherCore is a native abstract syntax tree (AST) programming language for AI systems. It bypasses text-parsing and instead consumes highly-efficient serialized binary AST structures.
+KnotenCore is a native abstract syntax tree (AST) programming language for AI systems. It bypasses text-parsing and instead consumes highly-efficient serialized binary AST structures.
 
-This specification documents the exact binary structural layout of the valid AetherCore abstract syntax tree. The execution environment deserializes this layout directly into executable logic.
+This specification documents the exact binary structural layout of the valid KnotenCore abstract syntax tree. The execution environment deserializes this layout directly into executable logic.
 
 ## 1. Serialization Format
-AetherCore AST schemas are serialized using **Bincode** (Little-Endian, fixed integer sizes). All Aether programs are distributed as `.aec` files (AetherCore Executable).
+KnotenCore AST schemas are serialized using **Bincode** (Little-Endian, fixed integer sizes). All Aether programs are distributed as `.nod` files (KnotenCore Executable).
 
 ## 2. Core Execution Model
-AetherCore executes structurally. Programs are represented by the `Node` enum. Each compilation unit or script starts with an implicit root block `Node::Block(Vec<Node>)` or any single `Node`. 
+KnotenCore executes structurally. Programs are represented by the `Node` enum. Each compilation unit or script starts with an implicit root block `Node::Block(Vec<Node>)` or any single `Node`. 
 
 The runtime maintains a **Call Stack** of **Stack Frames**. Variable resolution always prioritizes the local `StackFrame` before falling back to the global state.
 
 ## 3. Data Types
-AetherCore defines the following base types for AST values, managed as dynamically typed registers inside the runtime memory state, but statically locked during compilation by the internal `TypeChecker`:
+KnotenCore defines the following base types for AST values, managed as dynamically typed registers inside the runtime memory state, but statically locked during compilation by the internal `TypeChecker`:
 - **Int**: 64-bit signed integer (`i64`)
 - **Float**: 64-bit floating point number (`f64`)
 - **Bool**: 8-bit boolean value (`true = 1`, `false = 0`)
@@ -151,27 +151,27 @@ Triggers an asynchronous, polyphonic audio stream natively out of the thread loo
 *   **`UITextInput(Box<Node>)`**: Takes a Variable Name (String). Instantiates a single-line text input field inextricably linked to that variable in the ambient memory store, reacting to keyboard polling and cursor selection automatically.
 
 ### 4.13. Control Flow
-*   **`Import(String)`**: Imports another AetherCore executable JSON file by path, making its top-level definitions and variable assignments available in the current global scope.
+*   **`Import(String)`**: Imports another KnotenCore executable JSON file by path, making its top-level definitions and variable assignments available in the current global scope.
 *   **`If(Box<Node>, Box<Node>, Option<Box<Node>>)`**: Evaluates the first `Node` (Condition). If true, executes the second `Node` (Then Branch). Otherwise executes the third optional `Node` (Else Branch).
 *   **`While(Box<Node>, Box<Node>)`**: Evaluates the first `Node`. While true, repeatedly executes the second `Node` (Body block).
 *   **`Block(Vec<Node>)`**: Unconditionally executes a sequence of nodes in order. The block returns the value of its last node, or implicit void if empty.
 *   **`Return(Box<Node>)`**: Exits the current execution context (or program) returning the evaluated Node's result.
 
 ## 5. Execution State & Return Value
-Upon execution of a `.aec` structure, the engine evaluates nodes from root to leaf. 
+Upon execution of a `.nod` structure, the engine evaluates nodes from root to leaf. 
 The program's outcome is the value of the explicit root `Return` node, or the value of the last node in the top-level block.
 
 ## 6. Binary Footprint & Bundling
-The `run_aec` executor actively checks for the `AETHER_BUNDLE` environment flag during execution routines. The local toolchain exposes the `aether_build <file.json>` build command which evaluates custom memory directives hooking the AST natively within machine code. This outputs standalone `.exe` packages for zero-dependency execution.
+The `run_knc` executor actively checks for the `AETHER_BUNDLE` environment flag during execution routines. The local toolchain exposes the `aether_build <file.json>` build command which evaluates custom memory directives hooking the AST natively within machine code. This outputs standalone `.exe` packages for zero-dependency execution.
 ## 5. AI Safety & Validation
 
-AetherCore implements a multi-layer validation strategy to ensure that AI-generated scripts are syntactically and logically sound before execution.
+KnotenCore implements a multi-layer validation strategy to ensure that AI-generated scripts are syntactically and logically sound before execution.
 
 ### 5.1. JSON Schema (`aether_schema.json`)
 A formal JSON Schema is provided in the repository root. This schema defines the structural requirements for every `Node` variant. Developers and AI agents should use this schema for real-time validation during the code synthesis phase.
 
 ### 5.2. Pre-Flight Validator
-The `run_aec` tool includes a built-in static analyzer that performs deep AST inspection. It detects:
+The `run_knc` tool includes a built-in static analyzer that performs deep AST inspection. It detects:
 - **Empty Identifiers**: Ensures function and variable names are populated.
 - **File Integrity**: Verifies that all `Import` paths resolve to existing files.
 - **Circular Imports**: Detects and prevents infinite recursion in modular codebases.
@@ -180,6 +180,6 @@ The `run_aec` tool includes a built-in static analyzer that performs deep AST in
 ### 5.3. CLI Validation Mode
 Users can validate any script without executing it by using the `--check` flag:
 ```bash
-cargo run --bin run_aec -- --check examples/voxel/showcase_world.json
+cargo run --bin run_knc -- --check examples/voxel/showcase_world.json
 ```
 If the script passes all checks, the tool outputs `Syntax OK`. Otherwise, it provides a detailed list of logical and structural errors.

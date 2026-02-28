@@ -6,7 +6,7 @@ use std::process::Command;
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        eprintln!("Usage: aether_build <path_to.json>");
+        eprintln!("Usage: knoten_build <path_to.json>");
         std::process::exit(1);
     }
 
@@ -36,23 +36,23 @@ fn main() {
     let out_file_name = file_stem.to_string();
 
     println!(
-        "🎨 AetherCore Bundler: Compiling '{}' into standalone executable '{}'",
+        "🎨 KnotenCore Bundler: Compiling '{}' into standalone executable '{}'",
         input_path, out_file_name
     );
 
     // Generate the standalone launcher source file dynamically
     let launcher_source = format!(
         r#"
-use aether_compiler::executor::ExecutionEngine;
+use knoten_core::executor::ExecutionEngine;
 
 fn main() {{
-    println!("Running embedded AetherCore bundle...");
+    println!("Running embedded KnotenCore bundle...");
     
     // Statically bake the JSON file content into the binary string section
     let bundled_json = include_str!("{}");
     
     let ast = serde_json::from_str(bundled_json)
-        .expect("Failed to parse bundled AetherCore JSON AST");
+        .expect("Failed to parse bundled KnotenCore JSON AST");
         
     let mut engine = ExecutionEngine::new();
     let result = engine.execute(&ast);
@@ -63,7 +63,7 @@ fn main() {{
         safe_path_str
     );
 
-    let temp_launcher_path = "src/bin/_aether_temp_launcher.rs";
+    let temp_launcher_path = "src/bin/_knoten_temp_launcher.rs";
     fs::write(temp_launcher_path, launcher_source)
         .expect("Failed to write temporary launcher source file");
 
@@ -72,7 +72,7 @@ fn main() {{
         .arg("build")
         .arg("--release")
         .arg("--bin")
-        .arg("_aether_temp_launcher")
+        .arg("_knoten_temp_launcher")
         .status();
 
     // Clean up the temporary rust script immediately regardless of build success
@@ -90,11 +90,11 @@ fn main() {{
     #[cfg(windows)]
     let compiled_bin = PathBuf::from("target")
         .join("release")
-        .join("_aether_temp_launcher.exe");
+        .join("_knoten_temp_launcher.exe");
     #[cfg(not(windows))]
     let compiled_bin = PathBuf::from("target")
         .join("release")
-        .join("_aether_temp_launcher");
+        .join("_knoten_temp_launcher");
 
     if !compiled_bin.exists() {
         eprintln!(

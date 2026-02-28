@@ -25,30 +25,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
-name = "aether_compiler"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "cgmath",
- "cpal",
- "egui",
- "egui-wgpu",
- "egui-winit",
- "hound",
- "image",
- "noise",
- "pollster",
- "rand 0.10.0",
- "rodio",
- "serde",
- "serde_json",
- "tobj",
- "wgpu",
- "wgpu_glyph",
- "winit",
-]
-
-[[package]]
 name = "ahash"
 version = "0.8.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1580,6 +1556,30 @@ name = "khronos_api"
 version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
+
+[[package]]
+name = "knoten_core"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "cgmath",
+ "cpal",
+ "egui",
+ "egui-wgpu",
+ "egui-winit",
+ "hound",
+ "image",
+ "noise",
+ "pollster",
+ "rand 0.10.0",
+ "rodio",
+ "serde",
+ "serde_json",
+ "tobj",
+ "wgpu",
+ "wgpu_glyph",
+ "winit",
+]
 
 [[package]]
 name = "lazy_static"

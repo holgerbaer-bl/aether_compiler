@@ -1,13 +1,13 @@
 {
   "Block": [
     {
-      "Import": "stdlib/array_utils.aec"
+      "Import": "stdlib/array_utils.nod"
     },
     {
-      "Import": "stdlib/math_ext.aec"
+      "Import": "stdlib/math_ext.nod"
     },
     {
-      "Import": "stdlib/string_utils.aec"
+      "Import": "stdlib/string_utils.nod"
     },
     {
       "Print": {

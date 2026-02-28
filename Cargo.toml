@@ -1,17 +1,17 @@
 [package]
-name = "aether_compiler"
+name = "knoten_core"
 version = "0.1.0"
 edition = "2024"
 
 
 
 [[bin]]
-name = "run_aec"
-path = "src/bin/run_aec.rs"
+name = "run_knc"
+path = "src/bin/run_knc.rs"
 
 [[bin]]
-name = "aether_build"
-path = "src/bin/aether_build.rs"
+name = "knoten_build"
+path = "src/bin/knoten_build.rs"
 
 [[bin]]
 name = "rust_ingest"

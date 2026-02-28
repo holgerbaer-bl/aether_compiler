@@ -1,5 +1,5 @@
-use aether_compiler::ast::Node;
-use aether_compiler::executor::ExecutionEngine;
+use knoten_core::ast::Node;
+use knoten_core::executor::ExecutionEngine;
 use std::fs;
 use std::path::PathBuf;
 
@@ -7,13 +7,13 @@ use std::path::PathBuf;
 fn get_out_dir() -> PathBuf {
     let mut path = std::env::current_dir().unwrap();
     path.push("target");
-    path.push("tests_aec");
+    path.push("tests_nod");
     fs::create_dir_all(&path).unwrap();
     path
 }
 
 /// The aether_test! macro generates a standard #[test] function.
-/// It serializes the provided AST node into target/tests_aec/<name>.aec,
+/// It serializes the provided AST node into target/tests_nod/<name>.nod,
 /// records the expected return value, and then intentionally panics,
 /// signaling that the compiler needs to execute it but does not exist yet.
 macro_rules! aether_test {
@@ -25,7 +25,7 @@ macro_rules! aether_test {
             // Serialize current test to disk for the Meta-Compiler to read
             let text_data = serde_json::to_string(&ast).expect("JSON Serialization failed");
             let mut path = get_out_dir();
-            path.push("current_test.aec");
+            path.push("current_test.nod");
             fs::write(&path, &text_data).expect("Write failed");
 
             // Write expected output text file for test oracle validation

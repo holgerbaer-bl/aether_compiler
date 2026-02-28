@@ -4,7 +4,7 @@
       "InitWindow": [
         { "IntLiteral": 800 },
         { "IntLiteral": 600 },
-        { "StringLiteral": "AetherCore Text Editor (JSON Native)" }
+        { "StringLiteral": "KnotenCore Text Editor (JSON Native)" }
       ]
     },
     "InitGraphics",

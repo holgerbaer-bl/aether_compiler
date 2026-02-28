@@ -1,12 +1,12 @@
-# AetherCore Standard Library (ASL)
+# KnotenCore Standard Library (ASL)
 
-The AetherCore Standard Library (ASL) provides core utilities available to all Aether scripts via the module import system. These functions are written natively in Aether AST but optimized for general-purpose application development.
+The KnotenCore Standard Library (ASL) provides core utilities available to all Aether scripts via the module import system. These functions are written natively in Aether AST but optimized for general-purpose application development.
 
 To include an ASL module in your script, use the `Import` node pointing to the relative `/stdlib/` path.
 
 ---
 
-## 1. Array Utilities (`stdlib/array_utils.aec`)
+## 1. Array Utilities (`stdlib/array_utils.nod`)
 
 A collection of tools for dynamically searching and manipulating Aether Array memory structures.
 
@@ -31,7 +31,7 @@ Creates and returns a new array with the elements in reverse order.
 
 ---
 
-## 2. Advanced Mathematics (`stdlib/math_ext.aec`)
+## 2. Advanced Mathematics (`stdlib/math_ext.nod`)
 
 Extended mathematical functions built on top of the Aether execution primitives.
 
@@ -59,7 +59,7 @@ Converts degrees to radians.
 
 ---
 
-## 3. String Utilities (`stdlib/string_utils.aec`)
+## 3. String Utilities (`stdlib/string_utils.nod`)
 
 Basic string manipulation and checking utilities.
 
@@ -73,4 +73,4 @@ Checks if a string (or an array) contains any elements.
 Prepends a standardized prefix to a message logging identifier.
 *   **Parameters:**
     *   `msg` (String): The message to log.
-*   **Returns:** `String` (e.g. `"[AetherCore] Your message"`).
+*   **Returns:** `String` (e.g. `"[KnotenCore] Your message"`).

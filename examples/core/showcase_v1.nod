@@ -1,7 +1,7 @@
 {
   "Block": [
     { "Print": { "StringLiteral": "========================================" } },
-    { "Print": { "StringLiteral": "  AetherCore v0.1.0-alpha  —  Showcase" } },
+    { "Print": { "StringLiteral": "  KnotenCore v0.1.0-alpha  —  Showcase" } },
     { "Print": { "StringLiteral": "========================================" } },
 
     { "Print": { "StringLiteral": "" } },
@@ -71,7 +71,7 @@
         "player",
         {
           "ObjectLiteral": {
-            "name": { "StringLiteral": "AetherBot" },
+            "name": { "StringLiteral": "KnotenBot" },
             "hp": { "IntLiteral": 100 },
             "level": { "IntLiteral": 42 }
           }
@@ -83,13 +83,13 @@
 
     { "Print": { "StringLiteral": "" } },
     { "Print": { "StringLiteral": "[6] Automated Rust FFI (ExternCall)" } },
-    { "Import": "examples/core/test_lib.aec" },
+    { "Import": "examples/core/test_lib.nod" },
     { "Assign": ["vec", { "Call": ["Vector3", [{ "FloatLiteral": 3.0 }, { "FloatLiteral": 4.0 }, { "FloatLiteral": 0.0 }]] }] },
     { "Assign": ["norm", { "Call": ["normalize_vector", [{ "Identifier": "vec" }]] }] },
     { "Print": { "Concat": [{ "StringLiteral": "    normalize(3,4,0).x = " }, { "ToString": { "PropertyGet": [{ "Identifier": "norm" }, "x"] } }] } },
     { "Print": { "Concat": [{ "StringLiteral": "    normalize(3,4,0).y = " }, { "ToString": { "PropertyGet": [{ "Identifier": "norm" }, "y"] } }] } },
-    { "Assign": ["hash", { "Call": ["calculate_hash", [{ "StringLiteral": "AetherCore" }]] }] },
-    { "Print": { "Concat": [{ "StringLiteral": "    hash('AetherCore'): " }, { "ToString": { "Identifier": "hash" } }] } },
+    { "Assign": ["hash", { "Call": ["calculate_hash", [{ "StringLiteral": "KnotenCore" }]] }] },
+    { "Print": { "Concat": [{ "StringLiteral": "    hash('KnotenCore'): " }, { "ToString": { "Identifier": "hash" } }] } },
 
     { "Print": { "StringLiteral": "" } },
     { "Print": { "StringLiteral": "[7] Constant Folding (Optimizer)" } },

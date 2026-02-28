@@ -1,4 +1,4 @@
-use aether_compiler::executor::ExecutionEngine;
+use knoten_core::executor::ExecutionEngine;
 use std::env;
 use std::fs;
 
@@ -6,10 +6,10 @@ fn main() {
     let mut engine = ExecutionEngine::new();
 
     // Check if we are bundled (Sprint 11)
-    if let Some(bundled_json) = option_env!("AETHER_BUNDLE") {
-        println!("Running embedded AetherCore bundle...");
+    if let Some(bundled_json) = option_env!("KNOTEN_BUNDLE") {
+        println!("Running embedded KnotenCore bundle...");
         let ast = serde_json::from_str(bundled_json)
-            .expect("Failed to parse bundled AetherCore JSON AST");
+            .expect("Failed to parse bundled KnotenCore JSON AST");
         let result = engine.execute(&ast);
         println!("\nExecution Finished.\nResult: {}", result);
         return;
@@ -38,12 +38,12 @@ fn main() {
     }
 
     println!("CWD: {:?}", env::current_dir().unwrap());
-    println!("Loading AetherCore Script: {}", file_path);
+    println!("Loading KnotenCore Script: {}", file_path);
 
     let json_string = fs::read_to_string(&file_path).expect("Failed to read file");
-    let mut ast = serde_json::from_str(&json_string).expect("Failed to parse AetherCore JSON AST");
+    let mut ast = serde_json::from_str(&json_string).expect("Failed to parse KnotenCore JSON AST");
 
-    let mut typer = aether_compiler::optimizer::TypeChecker::new();
+    let mut typer = knoten_core::optimizer::TypeChecker::new();
     let _ = typer.check(&ast);
     if !typer.errors.is_empty() {
         eprintln!("\n[TypeError] Static Type Inference Failed:");
@@ -54,9 +54,9 @@ fn main() {
     }
 
     if !no_opt {
-        let before_nodes = aether_compiler::optimizer::count_nodes(&ast);
-        ast = aether_compiler::optimizer::optimize(ast);
-        let after_nodes = aether_compiler::optimizer::count_nodes(&ast);
+        let before_nodes = knoten_core::optimizer::count_nodes(&ast);
+        ast = knoten_core::optimizer::optimize(ast);
+        let after_nodes = knoten_core::optimizer::count_nodes(&ast);
         println!(
             "Compiler Optimization: Reduced AST from {} to {} nodes.",
             before_nodes, after_nodes
@@ -64,7 +64,7 @@ fn main() {
     }
 
     if is_check {
-        use aether_compiler::validator::Validator;
+        use knoten_core::validator::Validator;
         let mut validator = Validator::new();
         match validator.validate(&ast) {
             Ok(_) => {
