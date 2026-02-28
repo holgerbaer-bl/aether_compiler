@@ -155,3 +155,23 @@ The program's outcome is the value of the explicit root `Return` node, or the va
 
 ## 6. Binary Footprint & Bundling
 The `run_aec` executor actively checks for the `AETHER_BUNDLE` environment flag during execution routines. The local toolchain exposes the `aether_build <file.json>` build command which evaluates custom memory directives hooking the AST natively within machine code. This outputs standalone `.exe` packages for zero-dependency execution.
+## 5. AI Safety & Validation
+
+AetherCore implements a multi-layer validation strategy to ensure that AI-generated scripts are syntactically and logically sound before execution.
+
+### 5.1. JSON Schema (`aether_schema.json`)
+A formal JSON Schema is provided in the repository root. This schema defines the structural requirements for every `Node` variant. Developers and AI agents should use this schema for real-time validation during the code synthesis phase.
+
+### 5.2. Pre-Flight Validator
+The `run_aec` tool includes a built-in static analyzer that performs deep AST inspection. It detects:
+- **Empty Identifiers**: Ensures function and variable names are populated.
+- **File Integrity**: Verifies that all `Import` paths resolve to existing files.
+- **Circular Imports**: Detects and prevents infinite recursion in modular codebases.
+- **Structural Integrity**: Ensures that complex nodes (like `FnDef` or `Call`) have the required sub-nodes.
+
+### 5.3. CLI Validation Mode
+Users can validate any script without executing it by using the `--check` flag:
+```bash
+cargo run --bin run_aec -- --check <script.json>
+```
+If the script passes all checks, the tool outputs `Syntax OK`. Otherwise, it provides a detailed list of logical and structural errors.

@@ -1,0 +1,344 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AetherCore AST Schema",
+    "description": "JSON Schema for validating AetherCore Abstract Syntax Tree (AST) scripts.",
+    "type": "object",
+    "oneOf": [
+        {
+            "title": "IntLiteral",
+            "type": "object",
+            "properties": {
+                "IntLiteral": {
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "IntLiteral"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "title": "FloatLiteral",
+            "type": "object",
+            "properties": {
+                "FloatLiteral": {
+                    "type": "number"
+                }
+            },
+            "required": [
+                "FloatLiteral"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "title": "BoolLiteral",
+            "type": "object",
+            "properties": {
+                "BoolLiteral": {
+                    "type": "boolean"
+                }
+            },
+            "required": [
+                "BoolLiteral"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "title": "StringLiteral",
+            "type": "object",
+            "properties": {
+                "StringLiteral": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "StringLiteral"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "title": "Identifier",
+            "type": "object",
+            "properties": {
+                "Identifier": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "Identifier"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "title": "Assign",
+            "type": "object",
+            "properties": {
+                "Assign": {
+                    "type": "array",
+                    "items": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "$ref": "#"
+                        }
+                    ],
+                    "minItems": 2,
+                    "maxItems": 2
+                }
+            },
+            "required": [
+                "Assign"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "title": "Add",
+            "type": "object",
+            "properties": {
+                "Add": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                }
+            },
+            "required": [
+                "Add"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "title": "Sub",
+            "type": "object",
+            "properties": {
+                "Sub": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                }
+            },
+            "required": [
+                "Sub"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "title": "Mul",
+            "type": "object",
+            "properties": {
+                "Mul": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                }
+            },
+            "required": [
+                "Mul"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "title": "Div",
+            "type": "object",
+            "properties": {
+                "Div": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                }
+            },
+            "required": [
+                "Div"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "title": "FnDef",
+            "type": "object",
+            "properties": {
+                "FnDef": {
+                    "type": "array",
+                    "items": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "$ref": "#"
+                        }
+                    ],
+                    "minItems": 3,
+                    "maxItems": 3
+                }
+            },
+            "required": [
+                "FnDef"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "title": "Call",
+            "type": "object",
+            "properties": {
+                "Call": {
+                    "type": "array",
+                    "items": [
+                        {
+                            "type": "string"
+                        },
+                        {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#"
+                            }
+                        }
+                    ],
+                    "minItems": 2,
+                    "maxItems": 2
+                }
+            },
+            "required": [
+                "Call"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "title": "Import",
+            "type": "object",
+            "properties": {
+                "Import": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "Import"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "title": "If",
+            "type": "object",
+            "properties": {
+                "If": {
+                    "type": "array",
+                    "items": [
+                        {
+                            "$ref": "#"
+                        },
+                        {
+                            "$ref": "#"
+                        },
+                        {
+                            "$ref": "#"
+                        }
+                    ],
+                    "minItems": 2,
+                    "maxItems": 3
+                }
+            },
+            "required": [
+                "If"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "title": "While",
+            "type": "object",
+            "properties": {
+                "While": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                }
+            },
+            "required": [
+                "While"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "title": "Block",
+            "type": "object",
+            "properties": {
+                "Block": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#"
+                    }
+                }
+            },
+            "required": [
+                "Block"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "title": "Print",
+            "type": "object",
+            "properties": {
+                "Print": {
+                    "$ref": "#"
+                }
+            },
+            "required": [
+                "Print"
+            ],
+            "additionalProperties": false
+        },
+        {
+            "title": "Time",
+            "type": "string",
+            "enum": [
+                "Time"
+            ]
+        },
+        {
+            "title": "InitGraphics",
+            "type": "string",
+            "enum": [
+                "InitGraphics"
+            ]
+        },
+        {
+            "title": "InitVoxelMap",
+            "type": "string",
+            "enum": [
+                "InitVoxelMap"
+            ]
+        },
+        {
+            "title": "InitAudio",
+            "type": "string",
+            "enum": [
+                "InitAudio"
+            ]
+        },
+        {
+            "title": "GetLastKeypress",
+            "type": "string",
+            "enum": [
+                "GetLastKeypress"
+            ]
+        }
+    ]
+}

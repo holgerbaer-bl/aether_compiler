@@ -9,6 +9,7 @@ AetherCore is built on the principle that AI agents should not be constrained by
 ## Technical Specifications
 
 - **AI-Native Language Interface**: Pure JSON-based AST for direct model-to-code synthesis.
+- **AI Safety & Validation**: Built-in AST validation and a formal JSON Schema to ensure code integrity before execution.
 - **WGPU-Accelerated Rendering**: A high-performance graphics backend for compute-heavy and visual applications.
 - **Modular Architecture**: Comprehensive support for modular codebases via a native import system.
 - **Turing-Complete Control Flow**: Integrated support for recursion, loops (`While`), and conditional branching (`If`).
@@ -47,6 +48,7 @@ AetherCore basiert auf dem Prinzip, dass KI-Agenten nicht durch menschenlesbare 
 ## Technische Highlights
 
 - **KI-Native Schnittstelle**: Reine JSON-basierte AST-Struktur für die direkte Code-Synthese durch Modelle.
+- **KI-Sicherheit & Validierung**: Integrierte AST-Validierung und ein formales JSON-Schema zur Sicherstellung der Code-Integrität vor der Ausführung.
 - **WGPU-Grafikbeschleunigung**: Hochleistungs-Backend für rechenintensive und visuelle Anwendungen.
 - **Modulare Architektur**: Unterstützung für skalierbare Codebasen durch ein natives Import-System.
 - **Turing-Vollständigkeit**: Native Unterstützung für Rekursion, Schleifen (`While`) und bedingte Verzweigungen (`If`).
