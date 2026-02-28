@@ -70,6 +70,7 @@ Operations take a left-hand side (`lhs`) and right-hand side (`rhs`).
     - `Math.Random`: Returns a float between 0.0 and 1.0.
     - `Math.Sin`, `Math.Cos`: Standard trigonometric functions.
     - `Math.Floor`, `Math.Ceil`: Standard rounding functions.
+    - `Math.Perlin2D`: Returns a Perlin noise float based on `(x, y)` coordinates.
 
 ### 4.8. 3D Graphics (Vulkan/Metal/DX12 via WGPU)
 *   **`InitWindow(Box<Node>, Box<Node>, Box<Node>)`**: Initializes an OS Window (Width, Height, Title). Opens the window on the system.
@@ -95,6 +96,10 @@ Switches the voxel renderer from static instance arrays to a persistent, mutable
 #### `EnableInteraction`
 Activates 3D raycasting (DDA algorithm) and mouse input listeners. Left-click breaks blocks (Mining), Right-click places blocks (Building).
 *   **Structure:** `{"EnableInteraction": [{"BoolLiteral": <true/false>}]}`
+
+#### `SetVoxel`
+Directly modifies the persistent Voxel Map at the specified coordinates.
+*   **Structure:** `{"SetVoxel": [<X>, <Y>, <Z>, <BlockID>]}`
 
 #### `LoadSample`
 Reads an audio file into system RAM buffering bytes natively using the Rodio CPAL interface (Amiga Paula mapping).

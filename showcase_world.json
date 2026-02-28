@@ -1,0 +1,254 @@
+{
+    "Block": [
+        {
+            "InitWindow": [
+                {
+                    "IntLiteral": 1280
+                },
+                {
+                    "IntLiteral": 720
+                },
+                {
+                    "StringLiteral": "AetherCore: The World Smith"
+                }
+            ]
+        },
+        "InitGraphics",
+        "InitVoxelMap",
+        {
+            "InitCamera": {
+                "FloatLiteral": 75.0
+            }
+        },
+        {
+            "EnableInteraction": {
+                "BoolLiteral": true
+            }
+        },
+        {
+            "LoadTextureAtlas": [
+                {
+                    "StringLiteral": "assets/texture.png"
+                },
+                {
+                    "FloatLiteral": 16.0
+                }
+            ]
+        },
+        {
+            "LoadSample": [
+                {
+                    "IntLiteral": 1
+                },
+                {
+                    "StringLiteral": "assets/sound.wav"
+                }
+            ]
+        },
+        {
+            "Assign": [
+                "x",
+                {
+                    "IntLiteral": -16
+                }
+            ]
+        },
+        {
+            "While": [
+                {
+                    "Lt": [
+                        {
+                            "Identifier": "x"
+                        },
+                        {
+                            "IntLiteral": 16
+                        }
+                    ]
+                },
+                {
+                    "Block": [
+                        {
+                            "Assign": [
+                                "z",
+                                {
+                                    "IntLiteral": -16
+                                }
+                            ]
+                        },
+                        {
+                            "While": [
+                                {
+                                    "Lt": [
+                                        {
+                                            "Identifier": "z"
+                                        },
+                                        {
+                                            "IntLiteral": 16
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Block": [
+                                        {
+                                            "Assign": [
+                                                "noise",
+                                                {
+                                                    "NativeCall": [
+                                                        "Math.Perlin2D",
+                                                        [
+                                                            {
+                                                                "Mul": [
+                                                                    {
+                                                                        "Identifier": "x"
+                                                                    },
+                                                                    {
+                                                                        "FloatLiteral": 0.1
+                                                                    }
+                                                                ]
+                                                            },
+                                                            {
+                                                                "Mul": [
+                                                                    {
+                                                                        "Identifier": "z"
+                                                                    },
+                                                                    {
+                                                                        "FloatLiteral": 0.1
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "Assign": [
+                                                "h",
+                                                {
+                                                    "NativeCall": [
+                                                        "Math.Floor",
+                                                        [
+                                                            {
+                                                                "Add": [
+                                                                    {
+                                                                        "Mul": [
+                                                                            {
+                                                                                "Identifier": "noise"
+                                                                            },
+                                                                            {
+                                                                                "FloatLiteral": 6.0
+                                                                            }
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "FloatLiteral": 4.0
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "Assign": [
+                                                "y",
+                                                {
+                                                    "IntLiteral": -2
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "While": [
+                                                {
+                                                    "Lt": [
+                                                        {
+                                                            "Identifier": "y"
+                                                        },
+                                                        {
+                                                            "Identifier": "h"
+                                                        }
+                                                    ]
+                                                },
+                                                {
+                                                    "Block": [
+                                                        {
+                                                            "SetVoxel": [
+                                                                {
+                                                                    "Identifier": "x"
+                                                                },
+                                                                {
+                                                                    "Identifier": "y"
+                                                                },
+                                                                {
+                                                                    "Identifier": "z"
+                                                                },
+                                                                {
+                                                                    "IntLiteral": 1
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "Assign": [
+                                                                "y",
+                                                                {
+                                                                    "Add": [
+                                                                        {
+                                                                            "Identifier": "y"
+                                                                        },
+                                                                        {
+                                                                            "IntLiteral": 1
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        {
+                                            "Assign": [
+                                                "z",
+                                                {
+                                                    "Add": [
+                                                        {
+                                                            "Identifier": "z"
+                                                        },
+                                                        {
+                                                            "IntLiteral": 1
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "Assign": [
+                                "x",
+                                {
+                                    "Add": [
+                                        {
+                                            "Identifier": "x"
+                                        },
+                                        {
+                                            "IntLiteral": 1
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "PollEvents": {
+                "Block": []
+            }
+        }
+    ]
+}

@@ -1,6 +1,7 @@
 use crate::ast::Node;
 use cgmath::InnerSpace;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use noise::{NoiseFn, Perlin};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -696,6 +697,14 @@ impl ExecutionEngine {
                 let lv = self.evaluate(l);
                 let rv = self.evaluate(r);
                 match (lv, rv) {
+                    (
+                        ExecResult::Value(RelType::Int(li)),
+                        ExecResult::Value(RelType::Float(rf)),
+                    ) => ExecResult::Value(RelType::Bool((li as f64) == rf)),
+                    (
+                        ExecResult::Value(RelType::Float(lf)),
+                        ExecResult::Value(RelType::Int(ri)),
+                    ) => ExecResult::Value(RelType::Bool(lf == (ri as f64))),
                     (ExecResult::Value(l_val), ExecResult::Value(r_val)) => {
                         ExecResult::Value(RelType::Bool(l_val == r_val))
                     }
@@ -779,6 +788,14 @@ impl ExecutionEngine {
                         ExecResult::Value(RelType::Float(lf)),
                         ExecResult::Value(RelType::Float(rf)),
                     ) => ExecResult::Value(RelType::Bool(lf < rf)),
+                    (
+                        ExecResult::Value(RelType::Int(li)),
+                        ExecResult::Value(RelType::Float(rf)),
+                    ) => ExecResult::Value(RelType::Bool((li as f64) < rf)),
+                    (
+                        ExecResult::Value(RelType::Float(lf)),
+                        ExecResult::Value(RelType::Int(ri)),
+                    ) => ExecResult::Value(RelType::Bool(lf < (ri as f64))),
                     (ExecResult::Fault(err), _) | (_, ExecResult::Fault(err)) => {
                         ExecResult::Fault(err)
                     }
@@ -854,11 +871,14 @@ impl ExecutionEngine {
                                 ))
                             }
                         }
-                        (ExecResult::Value(_), _) => {
+                        (ExecResult::Value(_), ExecResult::Value(_)) => {
                             ExecResult::Fault("Array index must be an Integer".to_string())
                         }
-                        (fault, _) => fault,
-                        (_, fault) => fault,
+                        (ExecResult::Fault(err), _) | (_, ExecResult::Fault(err)) => {
+                            ExecResult::Fault(err)
+                        }
+                        (ExecResult::ReturnBlockInfo(v), _)
+                        | (_, ExecResult::ReturnBlockInfo(v)) => ExecResult::ReturnBlockInfo(v),
                     }
                 } else {
                     ExecResult::Fault(format!("Variable '{}' is not an array", var_name))
@@ -1098,6 +1118,34 @@ impl ExecutionEngine {
                             RelType::Int(i) => ExecResult::Value(RelType::Int(i)),
                             _ => ExecResult::Fault("Math.Ceil expects a Number".to_string()),
                         }
+                    }
+                    "Math.Perlin2D" => {
+                        if evaluated_args.len() != 2 {
+                            return ExecResult::Fault(
+                                "Math.Perlin2D expects 2 arguments (x, y)".to_string(),
+                            );
+                        }
+                        let x = match evaluated_args[0] {
+                            RelType::Float(f) => f,
+                            RelType::Int(i) => i as f64,
+                            _ => {
+                                return ExecResult::Fault(
+                                    "Math.Perlin2D arg 1 must be a Number".to_string(),
+                                );
+                            }
+                        };
+                        let y = match evaluated_args[1] {
+                            RelType::Float(f) => f,
+                            RelType::Int(i) => i as f64,
+                            _ => {
+                                return ExecResult::Fault(
+                                    "Math.Perlin2D arg 2 must be a Number".to_string(),
+                                );
+                            }
+                        };
+                        let perlin = Perlin::new(1); // Explicit seed for stability
+                        let val = perlin.get([x, y]);
+                        ExecResult::Value(RelType::Float(val))
                     }
                     _ => ExecResult::Fault(format!("Unknown native function '{}'", func_name)),
                 }
@@ -3035,101 +3083,107 @@ impl ExecutionEngine {
                 ) = (path_res, tile_size_res)
                 {
                     if let (Some(device), Some(queue)) = (&self.device, &self.queue) {
-                        if let Ok(img) = image::open(&path) {
-                            let rgba = img.to_rgba8();
-                            let dimensions = rgba.dimensions();
+                        match image::open(&path) {
+                            Ok(img) => {
+                                let rgba = img.to_rgba8();
+                                let dimensions = rgba.dimensions();
 
-                            let texture_size = wgpu::Extent3d {
-                                width: dimensions.0,
-                                height: dimensions.1,
-                                depth_or_array_layers: 1,
-                            };
+                                let texture_size = wgpu::Extent3d {
+                                    width: dimensions.0,
+                                    height: dimensions.1,
+                                    depth_or_array_layers: 1,
+                                };
 
-                            let texture = device.create_texture(&wgpu::TextureDescriptor {
-                                size: texture_size,
-                                mip_level_count: 1,
-                                sample_count: 1,
-                                dimension: wgpu::TextureDimension::D2,
-                                format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                                usage: wgpu::TextureUsages::TEXTURE_BINDING
-                                    | wgpu::TextureUsages::COPY_DST,
-                                label: Some("Atlas Texture"),
-                                view_formats: &[],
-                            });
-
-                            queue.write_texture(
-                                wgpu::ImageCopyTexture {
-                                    texture: &texture,
-                                    mip_level: 0,
-                                    origin: wgpu::Origin3d::ZERO,
-                                    aspect: wgpu::TextureAspect::All,
-                                },
-                                &rgba,
-                                wgpu::ImageDataLayout {
-                                    offset: 0,
-                                    bytes_per_row: Some(4 * dimensions.0),
-                                    rows_per_image: Some(dimensions.1),
-                                },
-                                texture_size,
-                            );
-
-                            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-                            let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-                                address_mode_u: wgpu::AddressMode::ClampToEdge,
-                                address_mode_v: wgpu::AddressMode::ClampToEdge,
-                                address_mode_w: wgpu::AddressMode::ClampToEdge,
-                                mag_filter: wgpu::FilterMode::Nearest, // CRISP PIXELS!
-                                min_filter: wgpu::FilterMode::Nearest,
-                                mipmap_filter: wgpu::FilterMode::Nearest,
-                                ..Default::default()
-                            });
-
-                            let layout =
-                                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                                    entries: &[
-                                        wgpu::BindGroupLayoutEntry {
-                                            binding: 0,
-                                            visibility: wgpu::ShaderStages::FRAGMENT,
-                                            ty: wgpu::BindingType::Texture {
-                                                multisampled: false,
-                                                view_dimension: wgpu::TextureViewDimension::D2,
-                                                sample_type: wgpu::TextureSampleType::Float {
-                                                    filterable: true,
-                                                },
-                                            },
-                                            count: None,
-                                        },
-                                        wgpu::BindGroupLayoutEntry {
-                                            binding: 1,
-                                            visibility: wgpu::ShaderStages::FRAGMENT,
-                                            ty: wgpu::BindingType::Sampler(
-                                                wgpu::SamplerBindingType::Filtering,
-                                            ),
-                                            count: None,
-                                        },
-                                    ],
-                                    label: Some("atlas_bind_group_layout"),
+                                let texture = device.create_texture(&wgpu::TextureDescriptor {
+                                    size: texture_size,
+                                    mip_level_count: 1,
+                                    sample_count: 1,
+                                    dimension: wgpu::TextureDimension::D2,
+                                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                                    usage: wgpu::TextureUsages::TEXTURE_BINDING
+                                        | wgpu::TextureUsages::COPY_DST,
+                                    label: Some("Atlas Texture"),
+                                    view_formats: &[],
                                 });
 
-                            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                                layout: &layout,
-                                entries: &[
-                                    wgpu::BindGroupEntry {
-                                        binding: 0,
-                                        resource: wgpu::BindingResource::TextureView(&view),
+                                queue.write_texture(
+                                    wgpu::ImageCopyTexture {
+                                        texture: &texture,
+                                        mip_level: 0,
+                                        origin: wgpu::Origin3d::ZERO,
+                                        aspect: wgpu::TextureAspect::All,
                                     },
-                                    wgpu::BindGroupEntry {
-                                        binding: 1,
-                                        resource: wgpu::BindingResource::Sampler(&sampler),
+                                    &rgba,
+                                    wgpu::ImageDataLayout {
+                                        offset: 0,
+                                        bytes_per_row: Some(4 * dimensions.0),
+                                        rows_per_image: Some(dimensions.1),
                                     },
-                                ],
-                                label: Some("atlas_bind_group"),
-                            });
+                                    texture_size,
+                                );
 
-                            self.voxel_atlas_bind_group = Some(bind_group);
-                            ExecResult::Value(RelType::Void)
-                        } else {
-                            ExecResult::Fault(format!("Failed to open atlas {}", path))
+                                let view =
+                                    texture.create_view(&wgpu::TextureViewDescriptor::default());
+                                let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+                                    address_mode_u: wgpu::AddressMode::ClampToEdge,
+                                    address_mode_v: wgpu::AddressMode::ClampToEdge,
+                                    address_mode_w: wgpu::AddressMode::ClampToEdge,
+                                    mag_filter: wgpu::FilterMode::Nearest, // CRISP PIXELS!
+                                    min_filter: wgpu::FilterMode::Nearest,
+                                    mipmap_filter: wgpu::FilterMode::Nearest,
+                                    ..Default::default()
+                                });
+
+                                let layout = device.create_bind_group_layout(
+                                    &wgpu::BindGroupLayoutDescriptor {
+                                        entries: &[
+                                            wgpu::BindGroupLayoutEntry {
+                                                binding: 0,
+                                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                                ty: wgpu::BindingType::Texture {
+                                                    multisampled: false,
+                                                    view_dimension: wgpu::TextureViewDimension::D2,
+                                                    sample_type: wgpu::TextureSampleType::Float {
+                                                        filterable: true,
+                                                    },
+                                                },
+                                                count: None,
+                                            },
+                                            wgpu::BindGroupLayoutEntry {
+                                                binding: 1,
+                                                visibility: wgpu::ShaderStages::FRAGMENT,
+                                                ty: wgpu::BindingType::Sampler(
+                                                    wgpu::SamplerBindingType::Filtering,
+                                                ),
+                                                count: None,
+                                            },
+                                        ],
+                                        label: Some("atlas_bind_group_layout"),
+                                    },
+                                );
+
+                                let bind_group =
+                                    device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                        layout: &layout,
+                                        entries: &[
+                                            wgpu::BindGroupEntry {
+                                                binding: 0,
+                                                resource: wgpu::BindingResource::TextureView(&view),
+                                            },
+                                            wgpu::BindGroupEntry {
+                                                binding: 1,
+                                                resource: wgpu::BindingResource::Sampler(&sampler),
+                                            },
+                                        ],
+                                        label: Some("atlas_bind_group"),
+                                    });
+
+                                self.voxel_atlas_bind_group = Some(bind_group);
+                                ExecResult::Value(RelType::Void)
+                            }
+                            Err(e) => {
+                                ExecResult::Fault(format!("Failed to open atlas {}: {}", path, e))
+                            }
                         }
                     } else {
                         ExecResult::Fault("WGPU Device missing for Atlas Loading".to_string())
@@ -3201,6 +3255,47 @@ impl ExecutionEngine {
                     }
                 }
                 ExecResult::Value(RelType::Void)
+            }
+            Node::SetVoxel(x_n, y_n, z_n, id_n) => {
+                let xr = self.evaluate(x_n);
+                let yr = self.evaluate(y_n);
+                let zr = self.evaluate(z_n);
+                let idr = self.evaluate(id_n);
+
+                if let (
+                    ExecResult::Value(xv),
+                    ExecResult::Value(yv),
+                    ExecResult::Value(zv),
+                    ExecResult::Value(idv),
+                ) = (xr, yr, zr, idr)
+                {
+                    let x = match xv {
+                        RelType::Int(i) => i as i32,
+                        RelType::Float(f) => f.floor() as i32,
+                        _ => return ExecResult::Fault("SetVoxel X must be a Number".to_string()),
+                    };
+                    let y = match yv {
+                        RelType::Int(i) => i as i32,
+                        RelType::Float(f) => f.floor() as i32,
+                        _ => return ExecResult::Fault("SetVoxel Y must be a Number".to_string()),
+                    };
+                    let z = match zv {
+                        RelType::Int(i) => i as i32,
+                        RelType::Float(f) => f.floor() as i32,
+                        _ => return ExecResult::Fault("SetVoxel Z must be a Number".to_string()),
+                    };
+                    let id = match idv {
+                        RelType::Int(i) => i as u32,
+                        RelType::Float(f) => f.floor() as u32,
+                        _ => return ExecResult::Fault("SetVoxel ID must be a Number".to_string()),
+                    };
+
+                    self.voxel_map.insert([x, y, z], id);
+                    self.voxel_map_dirty = true;
+                    ExecResult::Value(RelType::Void)
+                } else {
+                    ExecResult::Fault("SetVoxel arguments must evaluate to Values".to_string())
+                }
             }
             Node::EnableInteraction(enabled_n) => {
                 let res = self.evaluate(enabled_n);
@@ -3341,6 +3436,38 @@ impl ExecutionEngine {
                     _ => unreachable!(),
                 }
             }
+            (ExecResult::Value(RelType::Int(li)), ExecResult::Value(RelType::Float(rf))) => {
+                let lf = li as f64;
+                match op {
+                    '+' => ExecResult::Value(RelType::Float(lf + rf)),
+                    '-' => ExecResult::Value(RelType::Float(lf - rf)),
+                    '*' => ExecResult::Value(RelType::Float(lf * rf)),
+                    '/' => {
+                        if rf == 0.0 {
+                            ExecResult::Fault("Division by zero".to_string())
+                        } else {
+                            ExecResult::Value(RelType::Float(lf / rf))
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            (ExecResult::Value(RelType::Float(lf)), ExecResult::Value(RelType::Int(ri))) => {
+                let rf = ri as f64;
+                match op {
+                    '+' => ExecResult::Value(RelType::Float(lf + rf)),
+                    '-' => ExecResult::Value(RelType::Float(lf - rf)),
+                    '*' => ExecResult::Value(RelType::Float(lf * rf)),
+                    '/' => {
+                        if rf == 0.0 {
+                            ExecResult::Fault("Division by zero".to_string())
+                        } else {
+                            ExecResult::Value(RelType::Float(lf / rf))
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
             (ExecResult::Value(RelType::Str(ls)), ExecResult::Value(RelType::Str(rs))) => {
                 if op == '+' {
                     ExecResult::Value(RelType::Str(format!("{}{}", ls, rs)))
@@ -3349,6 +3476,9 @@ impl ExecutionEngine {
                 }
             }
             (ExecResult::Fault(err), _) | (_, ExecResult::Fault(err)) => ExecResult::Fault(err),
+            (ExecResult::ReturnBlockInfo(v), _) | (_, ExecResult::ReturnBlockInfo(v)) => {
+                ExecResult::ReturnBlockInfo(v)
+            }
             _ => ExecResult::Fault("Mathematical type mismatch".to_string()),
         }
     }

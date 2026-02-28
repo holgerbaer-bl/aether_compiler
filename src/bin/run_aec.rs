@@ -23,6 +23,7 @@ fn main() {
     }
 
     let file_path = &args[1];
+    println!("CWD: {:?}", env::current_dir().unwrap());
     println!("Loading AetherCore Script: {}", file_path);
 
     let json_string = fs::read_to_string(file_path).expect("Failed to read file");

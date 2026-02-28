@@ -88,6 +88,7 @@ pub enum Node {
     LoadSample(Box<Node>, Box<Node>), // ID (Int), Path (String)
     PlaySample(Box<Node>, Box<Node>, Box<Node>), // ID (Int), Volume (Float), Pitch (Float)
     InitVoxelMap,             // Transfers Voxel control to a mutable HashMap
+    SetVoxel(Box<Node>, Box<Node>, Box<Node>, Box<Node>), // X, Y, Z, ID
     EnableInteraction(Box<Node>), // Boolean (True): Activates Raycasting & Mouse Mapping
 
     // Control Flow
