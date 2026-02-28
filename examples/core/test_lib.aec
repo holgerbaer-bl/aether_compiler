@@ -1,0 +1,54 @@
+{
+  "Block": [
+    {
+      "FnDef": [
+        "calculate_hash",
+        [
+          "data"
+        ],
+        {
+          "Block": [
+            {
+              "Return": {
+                "ExternCall": {
+                  "module": "test_lib",
+                  "function": "calculate_hash",
+                  "args": [
+                    {
+                      "Identifier": "data"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "FnDef": [
+        "greet_user",
+        [
+          "name"
+        ],
+        {
+          "Block": [
+            {
+              "Return": {
+                "ExternCall": {
+                  "module": "test_lib",
+                  "function": "greet_user",
+                  "args": [
+                    {
+                      "Identifier": "name"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

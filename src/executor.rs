@@ -1,5 +1,6 @@
 use crate::ast::Node;
 use crate::natives::NativeModule;
+use crate::natives::bridge::{BridgeModule, CoreBridge};
 use cgmath::InnerSpace;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::collections::HashMap;
@@ -97,6 +98,7 @@ pub struct ExecutionEngine {
     pub shaders: Vec<wgpu::ShaderModule>,
     pub render_pipelines: HashMap<usize, wgpu::RenderPipeline>,
     pub native_modules: Vec<Box<dyn NativeModule>>,
+    pub bridge: Box<dyn BridgeModule>,
 
     // Voxel Engine (Sprint 12)
     pub camera_active: bool,
@@ -232,6 +234,7 @@ impl ExecutionEngine {
             audio_stream_handle: None,
             samples: HashMap::new(),
             call_stack: Vec::new(),
+            bridge: Box::new(CoreBridge),
         };
 
         engine
@@ -1119,15 +1122,26 @@ impl ExecutionEngine {
             Node::ExternCall {
                 module,
                 function,
-                args: _,
+                args,
             } => {
-                // Future FFI gateway
+                let mut evaluated_args = Vec::new();
+                for arg in args {
+                    match self.evaluate(arg) {
+                        ExecResult::Value(v) => evaluated_args.push(v),
+                        fault => return fault,
+                    }
+                }
+
+                if let Some(res) = self.bridge.handle(module, function, &evaluated_args) {
+                    return res;
+                }
+
+                // Future FFI gateway fallback
                 ExecResult::Fault(format!(
-                    "ExternCall mapped to foreign {}::{} - FFI Not Linked",
+                    "ExternCall mapped to foreign {}::{} - FFI Binding Not Found",
                     module, function
                 ))
             }
-
             // I/O
             Node::FileRead(path_node) => match self.evaluate(path_node) {
                 ExecResult::Value(RelType::Str(path)) => match std::fs::read(&path) {

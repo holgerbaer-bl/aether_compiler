@@ -13,6 +13,10 @@ path = "src/bin/run_aec.rs"
 name = "aether_build"
 path = "src/bin/aether_build.rs"
 
+[[bin]]
+name = "rust_ingest"
+path = "src/bin/rust_ingest.rs"
+
 
 [dependencies]
 bytemuck = { version = "1.25.0", features = ["derive"] }

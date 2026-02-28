@@ -1,0 +1,33 @@
+{
+  "Block": [
+    { "Import": "examples/core/test_lib.aec" },
+    {
+      "Assign": [
+        "greeting",
+        {
+          "Call": [
+            "greet_user",
+            [
+              { "StringLiteral": "Aether" }
+            ]
+          ]
+        }
+      ]
+    },
+    { "Print": { "Identifier": "greeting" } },
+    {
+      "Assign": [
+        "hash_val",
+        {
+          "Call": [
+            "calculate_hash",
+            [
+              { "StringLiteral": "AetherCore is now Autonomous!" }
+            ]
+          ]
+        }
+      ]
+    },
+    { "Print": { "Identifier": "hash_val" } }
+  ]
+}
