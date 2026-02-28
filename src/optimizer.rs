@@ -417,7 +417,7 @@ impl TypeChecker {
         // If it exists in any scope, check if the type matches. But we need to find where it is.
         for scope in self.scopes.iter_mut().rev() {
             if let Some(existing_type) = scope.get(name) {
-                if *existing_type != t && *existing_type != Type::Any {
+                if *existing_type != t && *existing_type != Type::Any && t != Type::Any {
                     self.errors.push(format!(
                         "TypeError: Variable '{}' was previously assigned as {:?} but is now being assigned {:?}",
                         name, existing_type, t
@@ -532,6 +532,12 @@ impl TypeChecker {
                     self.check(arg)?;
                 }
                 Ok(Type::Any)
+            }
+
+            // ToString always produces a String
+            Node::ToString(inner) => {
+                self.check(inner)?;
+                Ok(Type::String)
             }
 
             _ => {
