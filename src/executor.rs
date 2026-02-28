@@ -1116,6 +1116,17 @@ impl ExecutionEngine {
                 }
                 ExecResult::Fault(format!("Unknown native function '{}'", func_name))
             }
+            Node::ExternCall {
+                module,
+                function,
+                args: _,
+            } => {
+                // Future FFI gateway
+                ExecResult::Fault(format!(
+                    "ExternCall mapped to foreign {}::{} - FFI Not Linked",
+                    module, function
+                ))
+            }
 
             // I/O
             Node::FileRead(path_node) => match self.evaluate(path_node) {

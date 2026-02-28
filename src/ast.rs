@@ -51,6 +51,11 @@ pub enum Node {
     EvalJSONNative(Box<Node>),
     ToString(Box<Node>),
     NativeCall(String, Vec<Node>), // Function Name, Args
+    ExternCall {
+        module: String,
+        function: String,
+        args: Vec<Node>,
+    }, // Foreign C/Rust Function
 
     // 3D Graphics (WGPU FFI)
     InitWindow(Box<Node>, Box<Node>, Box<Node>), // W, H, Title
@@ -97,4 +102,16 @@ pub enum Node {
     Block(Vec<Node>),
     Return(Box<Node>),
     Import(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum Type {
+    Int,
+    Float,
+    Bool,
+    String,
+    Array,
+    Object,
+    Any,
+    Void,
 }

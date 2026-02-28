@@ -1,0 +1,35 @@
+{
+  "Block": [
+    {
+      "Assign": [
+        "x",
+        {
+          "IntLiteral": 42
+        }
+      ]
+    },
+    {
+      "Assign": [
+        "x",
+        {
+          "StringLiteral": "I am dynamically changing type!"
+        }
+      ]
+    },
+    {
+      "Assign": [
+        "y",
+        {
+          "Add": [
+            {
+              "IntLiteral": 10
+            },
+            {
+              "StringLiteral": "Hello"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

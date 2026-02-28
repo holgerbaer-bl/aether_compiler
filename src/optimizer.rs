@@ -80,6 +80,15 @@ pub fn count_nodes(node: &Node) -> usize {
                 count += count_nodes(n);
             }
         }
+        Node::ExternCall {
+            module: _,
+            function: _,
+            args,
+        } => {
+            for n in args {
+                count += count_nodes(n);
+            }
+        }
         Node::FnDef(_, _, body) => {
             count += count_nodes(body);
         }
@@ -166,6 +175,15 @@ pub fn optimize(node: Node) -> Node {
         Node::NativeCall(name, args) => {
             Node::NativeCall(name, args.into_iter().map(optimize).collect())
         }
+        Node::ExternCall {
+            module,
+            function,
+            args,
+        } => Node::ExternCall {
+            module,
+            function,
+            args: args.into_iter().map(optimize).collect(),
+        },
 
         Node::Assign(name, val) => Node::Assign(name, Box::new(optimize(*val))),
         Node::ArrayLiteral(elements) => {
@@ -340,5 +358,160 @@ fn optimize_bitwise(left: Node, right: Node, op: char) -> Node {
             '>' => Node::BitShiftRight(Box::new(opt_l), Box::new(opt_r)),
             _ => unreachable!(),
         },
+    }
+}
+
+// ---------------------------------------------------------
+// TYPE INFERENCE ENGINE (SPRINT 26)
+// ---------------------------------------------------------
+use crate::ast::Type;
+use std::collections::HashMap;
+
+pub struct TypeChecker {
+    pub scopes: Vec<HashMap<String, Type>>,
+    pub errors: Vec<String>,
+}
+
+impl TypeChecker {
+    pub fn new() -> Self {
+        Self {
+            scopes: vec![HashMap::new()],
+            errors: Vec::new(),
+        }
+    }
+
+    pub fn push_scope(&mut self) {
+        self.scopes.push(HashMap::new());
+    }
+
+    pub fn pop_scope(&mut self) {
+        self.scopes.pop();
+    }
+
+    pub fn set_var(&mut self, name: &str, t: Type) {
+        // If it exists in any scope, check if the type matches. But we need to find where it is.
+        for scope in self.scopes.iter_mut().rev() {
+            if let Some(existing_type) = scope.get(name) {
+                if *existing_type != t && *existing_type != Type::Any {
+                    self.errors.push(format!(
+                        "TypeError: Variable '{}' was previously assigned as {:?} but is now being assigned {:?}",
+                        name, existing_type, t
+                    ));
+                }
+                return; // Updated or conflicted
+            }
+        }
+        // Is a new variable
+        if let Some(scope) = self.scopes.last_mut() {
+            scope.insert(name.to_string(), t);
+        }
+    }
+
+    pub fn get_var(&self, name: &str) -> Option<Type> {
+        for scope in self.scopes.iter().rev() {
+            if let Some(t) = scope.get(name) {
+                return Some(t.clone());
+            }
+        }
+        None
+    }
+
+    pub fn check(&mut self, node: &Node) -> Result<Type, String> {
+        match node {
+            Node::IntLiteral(_) => Ok(Type::Int),
+            Node::FloatLiteral(_) => Ok(Type::Float),
+            Node::BoolLiteral(_) => Ok(Type::Bool),
+            Node::StringLiteral(_) => Ok(Type::String),
+            Node::Identifier(name) => {
+                if let Some(t) = self.get_var(name) {
+                    Ok(t)
+                } else {
+                    Ok(Type::Any) // Unknown variables shouldn't aggressively fail if dynamically placed, or fail. Wait, let's treat as Any
+                }
+            }
+            Node::Time | Node::GetLastKeypress => Ok(Type::Float),
+
+            Node::Assign(name, val_node) => {
+                let expr_type = self.check(val_node)?;
+                self.set_var(name, expr_type);
+                Ok(Type::Void) // Assign doesn't traditionally return type in strict checks
+            }
+
+            Node::Add(l, r) | Node::Sub(l, r) | Node::Mul(l, r) | Node::Div(l, r) => {
+                let lt = self.check(l)?;
+                let rt = self.check(r)?;
+                if lt != rt && lt != Type::Any && rt != Type::Any {
+                    self.errors
+                        .push(format!("TypeError: Math mismatch {:?} and {:?}", lt, rt));
+                }
+                Ok(lt) // Assume left type dominant for now
+            }
+            Node::Eq(l, r) | Node::Lt(l, r) => {
+                let _lt = self.check(l)?;
+                let _rt = self.check(r)?;
+                Ok(Type::Bool)
+            }
+            Node::If(cond, then_b, else_b) => {
+                let ct = self.check(cond)?;
+                if ct != Type::Bool && ct != Type::Any {
+                    self.errors.push(format!(
+                        "TypeError: 'If' condition expects Bool, found {:?}",
+                        ct
+                    ));
+                }
+                self.push_scope();
+                self.check(then_b)?;
+                self.pop_scope();
+
+                if let Some(eb) = else_b {
+                    self.push_scope();
+                    self.check(eb)?;
+                    self.pop_scope();
+                }
+                Ok(Type::Void)
+            }
+            Node::While(cond, body) => {
+                let ct = self.check(cond)?;
+                if ct != Type::Bool && ct != Type::Any {
+                    self.errors.push(format!(
+                        "TypeError: 'While' condition expects Bool, found {:?}",
+                        ct
+                    ));
+                }
+                self.push_scope();
+                self.check(body)?;
+                self.pop_scope();
+                Ok(Type::Void)
+            }
+            Node::Block(nodes) => {
+                self.push_scope();
+                for n in nodes {
+                    self.check(n)?;
+                }
+                self.pop_scope();
+                Ok(Type::Void)
+            }
+
+            // FFI Extern Call
+            Node::ExternCall {
+                module,
+                function,
+                args,
+            } => {
+                // To safely implement this, we normally look up a signature.
+                // For Sprint 26 rules: Argument types must match what NativeModule says.
+                // We'll trust run_aec.rs to bind signatures, or for now, we just traverse args to mark them.
+                for arg in args {
+                    self.check(arg)?;
+                }
+                Ok(Type::Any)
+            }
+
+            _ => {
+                // Fallback catch-all for node types we haven't strictly typed yet
+                // The optimizer shouldn't block Graphics or Arrays without specific rules
+                Ok(Type::Any)
+            }
+        }
     }
 }

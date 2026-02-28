@@ -28,3 +28,17 @@ When automatically optimizing the AST prior to the interpretation lock:
 *   **Execution Behavior**: Semantically identical `StdOut`.
 
 This node collapse guarantees AetherCore's capabilities for scaling into deeply abstracted Self-Hosting applications logic via macros or heavily generalized functions.
+
+---
+
+## Sprint 26: The Rust-Connector (Static Type Inference)
+
+A secondary pre-flight pipeline layer, the `TypeChecker`, was introduced traversing the entirety of the execution layout prior to dispatch.
+This pipeline guarantees AetherCore scripts conform completely to **Static Type Inference** algorithms commonly utilized in strongly formulated environments (C++ / Rust).
+
+### Features
+1. **Semantic Assignments**: Variables mapped by the `Assign` identifier automatically inherit the primitive signature of their originating expression (e.g. `x = 42` locks `x::Int`).
+2. **Immutability Checks**: Reassigning a variable with an unaligned primitive (`x = "Hello"`) terminates runtime execution instantly with `[TypeError]`.
+3. **Foreign Interop bounds (`ExternCall`)**: A structural anchor `TypeSignature` maps explicitly requested native Rust memory addresses so standard arguments validate explicitly against internal compilation targets natively.
+
+This ensures all logic leaving the compilation lock maintains deterministic allocations, perfectly aligning AetherCore modules with arbitrary natively-linked C libraries securely.

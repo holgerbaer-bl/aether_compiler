@@ -43,6 +43,16 @@ fn main() {
     let json_string = fs::read_to_string(&file_path).expect("Failed to read file");
     let mut ast = serde_json::from_str(&json_string).expect("Failed to parse AetherCore JSON AST");
 
+    let mut typer = aether_compiler::optimizer::TypeChecker::new();
+    let _ = typer.check(&ast);
+    if !typer.errors.is_empty() {
+        eprintln!("\n[TypeError] Static Type Inference Failed:");
+        for err in typer.errors {
+            eprintln!(" - {}", err);
+        }
+        std::process::exit(1);
+    }
+
     if !no_opt {
         let before_nodes = aether_compiler::optimizer::count_nodes(&ast);
         ast = aether_compiler::optimizer::optimize(ast);

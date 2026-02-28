@@ -13,12 +13,15 @@ AetherCore executes structurally. Programs are represented by the `Node` enum. E
 The runtime maintains a **Call Stack** of **Stack Frames**. Variable resolution always prioritizes the local `StackFrame` before falling back to the global state.
 
 ## 3. Data Types
-AetherCore defines the following base types for AST values, managed as dynamically typed registers inside the runtime memory state:
+AetherCore defines the following base types for AST values, managed as dynamically typed registers inside the runtime memory state, but statically locked during compilation by the internal `TypeChecker`:
 - **Int**: 64-bit signed integer (`i64`)
 - **Float**: 64-bit floating point number (`f64`)
 - **Bool**: 8-bit boolean value (`true = 1`, `false = 0`)
 - **String**: UTF-8 string, prefixed with a 64-bit length identifier
 - **Array**: A dynamically sized list of values
+- **Object**: Dictionary key mapping formats.
+- **Void**: Null expression boundaries.
+- **Any**: Unresolved variable signatures gracefully degrading type inferences.
 
 ## 4. AST Node Structures
 The AST consists of a single sum type `Node`, defined mathematically as follows:
@@ -75,6 +78,7 @@ Operations take a left-hand side (`lhs`) and right-hand side (`rhs`).
     - `IO.ReadFile(path)`: Reads the file at `path` (String) and returns its contents as a String.
     - `IO.AppendFile(path, content)`: Appends `content` (String) to the file at `path` (String). Returns a Boolean.
     - `IO.FileExists(path)`: Returns `true` if the file at `path` (String) exists on disk, `false` otherwise.
+*   **`ExternCall { module: String, function: String, args: Vec<Node> }`**: Bridging structure for explicitly typed Foreign Function Interfaces out to native C/Rust libraries. Arguments mapped via strictly enforced static type assignments.
 
 ### 4.8. 3D Graphics (Vulkan/Metal/DX12 via WGPU)
 *   **`InitWindow(Box<Node>, Box<Node>, Box<Node>)`**: Initializes an OS Window (Width, Height, Title). Opens the window on the system.

@@ -85,19 +85,23 @@ impl Validator {
                 }
                 self.check_node(body);
             }
-            Node::Call(name, args) => {
+            Node::Call(name, args) | Node::NativeCall(name, args) => {
                 if name.is_empty() {
                     self.errors
-                        .push("Call: Function name cannot be empty".to_string());
+                        .push("Call/NativeCall: Function name cannot be empty".to_string());
                 }
                 for arg in args {
                     self.check_node(arg);
                 }
             }
-            Node::NativeCall(name, args) => {
-                if name.is_empty() {
+            Node::ExternCall {
+                module,
+                function,
+                args,
+            } => {
+                if module.is_empty() || function.is_empty() {
                     self.errors
-                        .push("NativeCall: Function name cannot be empty".to_string());
+                        .push("ExternCall: Module and function cannot be empty".to_string());
                 }
                 for arg in args {
                     self.check_node(arg);
