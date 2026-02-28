@@ -391,6 +391,12 @@ pub struct TypeChecker {
     pub errors: Vec<String>,
 }
 
+impl Default for TypeChecker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TypeChecker {
     pub fn new() -> Self {
         Self {
@@ -515,8 +521,8 @@ impl TypeChecker {
 
             // FFI Extern Call
             Node::ExternCall {
-                module,
-                function,
+                module: _module,
+                function: _function,
                 args,
             } => {
                 // To safely implement this, we normally look up a signature.

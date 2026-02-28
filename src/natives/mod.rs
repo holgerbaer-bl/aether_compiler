@@ -1,4 +1,3 @@
-use crate::ast::Node;
 use crate::executor::{ExecResult, RelType};
 
 pub mod bridge;

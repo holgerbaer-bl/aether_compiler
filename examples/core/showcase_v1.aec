@@ -1,0 +1,104 @@
+{
+  "Block": [
+    { "Print": { "StringLiteral": "========================================" } },
+    { "Print": { "StringLiteral": "  AetherCore v0.1.0-alpha  —  Showcase" } },
+    { "Print": { "StringLiteral": "========================================" } },
+
+    { "Print": { "StringLiteral": "" } },
+    { "Print": { "StringLiteral": "[1] Variables & Math" } },
+    { "Assign": ["radius", { "FloatLiteral": 5.0 }] },
+    { "Assign": ["pi", { "FloatLiteral": 3.14159 }] },
+    { "Assign": ["circumference", { "Mul": [{ "Mul": [{ "FloatLiteral": 2.0 }, { "Identifier": "pi" }] }, { "Identifier": "radius" }] }] },
+    { "Print": { "Concat": [{ "StringLiteral": "    Circle circumference (r=5): " }, { "ToString": { "Identifier": "circumference" } }] } },
+
+    { "Print": { "StringLiteral": "" } },
+    { "Print": { "StringLiteral": "[2] Control Flow (If/Else)" } },
+    { "Assign": ["score", { "IntLiteral": 85 }] },
+    {
+      "If": [
+        { "Lt": [{ "Identifier": "score" }, { "IntLiteral": 50 }] },
+        { "Print": { "StringLiteral": "    Result: FAIL" } },
+        { "If": [
+          { "Lt": [{ "Identifier": "score" }, { "IntLiteral": 80 }] },
+          { "Print": { "StringLiteral": "    Result: PASS" } },
+          { "Print": { "StringLiteral": "    Result: EXCELLENT" } }
+        ]}
+      ]
+    },
+
+    { "Print": { "StringLiteral": "" } },
+    { "Print": { "StringLiteral": "[3] Arrays & Loops" } },
+    { "Assign": ["data", { "ArrayLiteral": [{ "IntLiteral": 10 }, { "IntLiteral": 20 }, { "IntLiteral": 30 }, { "IntLiteral": 40 }, { "IntLiteral": 50 }] }] },
+    { "Assign": ["sum", { "IntLiteral": 0 }] },
+    { "Assign": ["i", { "IntLiteral": 0 }] },
+    {
+      "While": [
+        { "Lt": [{ "Identifier": "i" }, { "ArrayLen": "data" }] },
+        { "Block": [
+          { "Assign": ["sum", { "Add": [{ "Identifier": "sum" }, { "Index": [{ "Identifier": "data" }, { "Identifier": "i" }] }] }] },
+          { "Assign": ["i", { "Add": [{ "Identifier": "i" }, { "IntLiteral": 1 }] }] }
+        ]}
+      ]
+    },
+    { "Print": { "Concat": [{ "StringLiteral": "    Sum of [10,20,30,40,50]: " }, { "ToString": { "Identifier": "sum" } }] } },
+
+    { "Print": { "StringLiteral": "" } },
+    { "Print": { "StringLiteral": "[4] Functions" } },
+    {
+      "FnDef": [
+        "factorial",
+        ["n"],
+        { "Block": [
+          { "Assign": ["result", { "IntLiteral": 1 }] },
+          { "Assign": ["counter", { "Identifier": "n" }] },
+          { "While": [
+            { "Lt": [{ "IntLiteral": 1 }, { "Identifier": "counter" }] },
+            { "Block": [
+              { "Assign": ["result", { "Mul": [{ "Identifier": "result" }, { "Identifier": "counter" }] }] },
+              { "Assign": ["counter", { "Sub": [{ "Identifier": "counter" }, { "IntLiteral": 1 }] }] }
+            ]}
+          ]},
+          { "Return": { "Identifier": "result" } }
+        ]}
+      ]
+    },
+    { "Print": { "Concat": [{ "StringLiteral": "    factorial(10): " }, { "ToString": { "Call": ["factorial", [{ "IntLiteral": 10 }]] } }] } },
+
+    { "Print": { "StringLiteral": "" } },
+    { "Print": { "StringLiteral": "[5] Objects (Structs / Dictionaries)" } },
+    {
+      "Assign": [
+        "player",
+        {
+          "ObjectLiteral": {
+            "name": { "StringLiteral": "AetherBot" },
+            "hp": { "IntLiteral": 100 },
+            "level": { "IntLiteral": 42 }
+          }
+        }
+      ]
+    },
+    { "Print": { "Concat": [{ "StringLiteral": "    Player: " }, { "PropertyGet": [{ "Identifier": "player" }, "name"] }] } },
+    { "Print": { "Concat": [{ "StringLiteral": "    Level:  " }, { "ToString": { "PropertyGet": [{ "Identifier": "player" }, "level"] } }] } },
+
+    { "Print": { "StringLiteral": "" } },
+    { "Print": { "StringLiteral": "[6] Automated Rust FFI (ExternCall)" } },
+    { "Import": "examples/core/test_lib.aec" },
+    { "Assign": ["vec", { "Call": ["Vector3", [{ "FloatLiteral": 3.0 }, { "FloatLiteral": 4.0 }, { "FloatLiteral": 0.0 }]] }] },
+    { "Assign": ["norm", { "Call": ["normalize_vector", [{ "Identifier": "vec" }]] }] },
+    { "Print": { "Concat": [{ "StringLiteral": "    normalize(3,4,0).x = " }, { "ToString": { "PropertyGet": [{ "Identifier": "norm" }, "x"] } }] } },
+    { "Print": { "Concat": [{ "StringLiteral": "    normalize(3,4,0).y = " }, { "ToString": { "PropertyGet": [{ "Identifier": "norm" }, "y"] } }] } },
+    { "Assign": ["hash", { "Call": ["calculate_hash", [{ "StringLiteral": "AetherCore" }]] }] },
+    { "Print": { "Concat": [{ "StringLiteral": "    hash('AetherCore'): " }, { "ToString": { "Identifier": "hash" } }] } },
+
+    { "Print": { "StringLiteral": "" } },
+    { "Print": { "StringLiteral": "[7] Constant Folding (Optimizer)" } },
+    { "Print": { "StringLiteral": "    The expression 10 * 5 + 3 is folded to 53 at compile-time:" } },
+    { "Print": { "Add": [{ "Mul": [{ "IntLiteral": 10 }, { "IntLiteral": 5 }] }, { "IntLiteral": 3 }] } },
+
+    { "Print": { "StringLiteral": "" } },
+    { "Print": { "StringLiteral": "========================================" } },
+    { "Print": { "StringLiteral": "  All systems operational. v0.1.0-alpha" } },
+    { "Print": { "StringLiteral": "========================================" } }
+  ]
+}

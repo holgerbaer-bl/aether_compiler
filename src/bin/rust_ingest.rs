@@ -61,41 +61,41 @@ fn parse_rust_file(file_content: &str, module_name: &str) -> Node {
             let sig_end = line.find('{').unwrap_or(line.len());
             let sig = line[sig_start..sig_end].trim();
 
-            if let Some(paren_start) = sig.find('(') {
-                if let Some(paren_end) = sig.find(')') {
-                    let fn_name = sig[0..paren_start].trim();
-                    let args_str = &sig[paren_start + 1..paren_end];
+            if let Some(paren_start) = sig.find('(')
+                && let Some(paren_end) = sig.find(')')
+            {
+                let fn_name = sig[0..paren_start].trim();
+                let args_str = &sig[paren_start + 1..paren_end];
 
-                    let mut arg_names = Vec::new();
-                    if !args_str.trim().is_empty() {
-                        for arg_def in args_str.split(',') {
-                            let parts: Vec<&str> = arg_def.split(':').collect();
-                            if !parts.is_empty() {
-                                arg_names.push(parts[0].trim().to_string());
-                            }
+                let mut arg_names = Vec::new();
+                if !args_str.trim().is_empty() {
+                    for arg_def in args_str.split(',') {
+                        let parts: Vec<&str> = arg_def.split(':').collect();
+                        if !parts.is_empty() {
+                            arg_names.push(parts[0].trim().to_string());
                         }
                     }
-
-                    // Build the ExternCall node mapped to those arguments
-                    let mut call_args = Vec::new();
-                    for arg in &arg_names {
-                        call_args.push(Node::Identifier(arg.clone()));
-                    }
-
-                    let extern_call = Node::ExternCall {
-                        module: module_name.to_string(),
-                        function: fn_name.to_string(),
-                        args: call_args,
-                    };
-
-                    let fn_def = Node::FnDef(
-                        fn_name.to_string(),
-                        arg_names,
-                        Box::new(Node::Block(vec![Node::Return(Box::new(extern_call))])),
-                    );
-
-                    functions.push(fn_def);
                 }
+
+                // Build the ExternCall node mapped to those arguments
+                let mut call_args = Vec::new();
+                for arg in &arg_names {
+                    call_args.push(Node::Identifier(arg.clone()));
+                }
+
+                let extern_call = Node::ExternCall {
+                    module: module_name.to_string(),
+                    function: fn_name.to_string(),
+                    args: call_args,
+                };
+
+                let fn_def = Node::FnDef(
+                    fn_name.to_string(),
+                    arg_names,
+                    Box::new(Node::Block(vec![Node::Return(Box::new(extern_call))])),
+                );
+
+                functions.push(fn_def);
             }
         }
     }

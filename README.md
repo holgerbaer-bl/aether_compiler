@@ -1,86 +1,177 @@
 # AetherCore
 
-AetherCore is a high-performance, JIT-compiled runtime environment designed for AI-native execution. It processes a turing-complete JSON Abstract Syntax Tree (AST) directly, eliminating the overhead of text-based parsing for large language models and autonomous agents.
+**A high-performance, AI-native compiler runtime that executes structured JSON Abstract Syntax Trees directly — powered by Rust.**
 
-## Core Philosophy
+[![Rust](https://img.shields.io/badge/Language-Rust-orange)](https://www.rust-lang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-AetherCore is built on the principle that AI agents should not be constrained by human-readable syntax. By utilizing a structured JSON AST as its primary language, AetherCore provides a direct interface for agents to generate, optimize, and execute complex logic with maximum precision and zero parsing ambiguity.
+---
 
-## Technical Specifications
+## Why AetherCore?
 
-- **AI-Native Language Interface**: Pure JSON-based AST for direct model-to-code synthesis.
-- **AI Safety & Validation**: Built-in AST validation and a formal JSON Schema to ensure code integrity before execution.
-- **WGPU-Accelerated Rendering**: A high-performance graphics backend for compute-heavy and visual applications.
-- **Modular Architecture**: Comprehensive support for modular codebases via a native import system.
-- **Turing-Complete Control Flow**: Integrated support for recursion, loops (`While`), and conditional branching (`If`).
-- **Standard Library (StdLib)**: Optimized Rust-native implementations for mathematics, bitwise operations, and memory management.
+| Feature | Description |
+|---|---|
+| **JSON-AST Language** | Programs are pure JSON — no text parsing, no ambiguity. Perfect for AI code generation. |
+| **AI-Native Design** | LLMs generate valid AetherCore programs directly as structured data. Zero syntax errors. |
+| **Static Type Inference** | Types are inferred and enforced before execution. Catch bugs at compile time. |
+| **Automated Rust FFI** | Feed any `.rs` file to the ingestor — it generates typed AetherCore bindings automatically. |
+| **Struct Marshalling** | Pass complex objects across the FFI boundary. Rust structs ↔ AetherCore Objects. |
+| **AST Optimizer** | Constant folding and dead code elimination reduce your AST before it runs. |
+| **WGPU Graphics** | Built-in 3D rendering pipeline with voxel engine, shaders, and real-time physics. |
+| **Audio Engine** | Native audio synthesis with multi-voice waveform generation (Sine, Square, Saw, Tri, Noise). |
 
-## Technical Showcase: Voxel Engine POC
+---
 
-The repository includes a comprehensive Voxel rendering engine as a proof-of-concept for AetherCore's capabilities. This showcasing world demonstrates:
-- Persistent state management across large-scale voxel maps.
-- Real-time player physics and AABB collision detection.
-- Advanced WGSL shader integration with directional lighting and distance-based fog.
-- Procedural terrain generation utilizing native Perlin noise.
+## Quickstart
 
-## Getting Started
+```bash
+# Clone
+git clone https://github.com/holgerbaer-bl/aether_compiler.git
+cd aether_compiler
 
-### Prerequisites
+# Run the v0.1.0 Showcase (demonstrates ALL features)
+cargo run --bin run_aec examples/core/showcase_v1.aec
+```
+
+### Expected Output
+
+```
+========================================
+  AetherCore v0.1.0-alpha  —  Showcase
+========================================
+
+[1] Variables & Math
+    Circle circumference (r=5): 31.4159
+
+[2] Control Flow (If/Else)
+    Result: EXCELLENT
+
+[3] Arrays & Loops
+    Sum of [10,20,30,40,50]: 150
+
+[4] Functions
+    factorial(10): 3628800
+
+[5] Objects (Structs / Dictionaries)
+    Player: AetherBot
+    Level:  42
+
+[6] Automated Rust FFI (ExternCall)
+    normalize(3,4,0).x = 0.6
+    normalize(3,4,0).y = 0.8
+    hash('AetherCore'): 5613
+
+[7] Constant Folding (Optimizer)
+    10 * 5 + 3 → folded to 53 at compile-time
+```
+
+---
+
+## How It Works
+
+AetherCore programs are JSON files containing an Abstract Syntax Tree. Here's "Hello World":
+
+```json
+{
+  "Print": { "StringLiteral": "Hello, World!" }
+}
+```
+
+A more complex example — calling a **native Rust function** from AetherCore:
+
+```json
+{
+  "Block": [
+    { "Import": "examples/core/test_lib.aec" },
+    { "Assign": ["v", { "Call": ["Vector3", [
+        { "FloatLiteral": 3.0 },
+        { "FloatLiteral": 4.0 },
+        { "FloatLiteral": 0.0 }
+    ]]}]},
+    { "Assign": ["n", { "Call": ["normalize_vector", [{ "Identifier": "v" }]]}]},
+    { "Print": { "PropertyGet": [{ "Identifier": "n" }, "x"] }}
+  ]
+}
+```
+
+This constructs a `Vector3` object, passes it across the FFI bridge to a Rust `normalize_vector` function, and prints the result (`0.6`).
+
+---
+
+## Optimizer: Constant Folding
+
+Before execution, AetherCore's optimizer simplifies your AST:
+
+```
+Before:  { "Add": [{ "Mul": [{ "IntLiteral": 10 }, { "IntLiteral": 5 }] }, { "IntLiteral": 3 }] }
+After:   { "IntLiteral": 53 }
+
+AST reduced from 5 nodes → 1 node.
+```
+
+Dead code (e.g. `While(false, ...)`) is eliminated entirely.
+
+---
+
+## Automated Rust FFI
+
+Convert any Rust library to AetherCore bindings in one command:
+
+```bash
+cargo run --bin rust_ingest src/test_lib.rs
+# → Generates examples/core/test_lib.aec with typed ExternCall wrappers
+```
+
+The ingestor parses `pub fn` and `pub struct` definitions, generating:
+- **ExternCall wrappers** for functions
+- **Constructor functions** for structs (returning `ObjectLiteral`)
+
+The runtime bridge validates all struct fields at the FFI boundary with clean `[FFI Error]` messages.
+
+---
+
+## Repository Structure
+
+```
+src/
+├── ast.rs              # AST node definitions & Type enum
+├── executor.rs         # Runtime evaluation engine
+├── optimizer.rs        # Constant folding, dead code elimination, type inference
+├── validator.rs        # AST structural validation
+├── lib.rs              # Crate exports
+├── bin/
+│   ├── run_aec.rs      # Main executable
+│   └── rust_ingest.rs  # Rust → AetherCore FFI generator
+├── natives/
+│   ├── math.rs         # Math native module
+│   ├── io.rs           # I/O native module
+│   └── bridge.rs       # FFI struct marshalling bridge
+└── test_lib.rs         # Mock external Rust library
+
+examples/
+├── core/               # Language feature demos
+│   ├── showcase_v1.aec # ← The Ultimate Demo
+│   └── ...
+└── voxel/              # 3D Voxel Engine showcase
+
+docs/
+├── AETHER_SPEC.md      # Language specification
+├── RUST_INGEST.md      # FFI automation docs
+├── STDLIB.md           # Standard library reference
+└── AUDIT.md            # Optimization benchmarks
+
+tests/                  # Rust integration tests
+stdlib/                 # AetherCore standard library modules
+assets/                 # Textures, shaders, fonts
+```
+
+---
+
+## Prerequisites
+
 - [Rust](https://www.rust-lang.org/) (Latest Stable)
-- A GPU compatible with Vulkan, Metal, or DX12.
-
-### Execution
-To execute the AetherCore Voxel Showcase:
-```bash
-cargo run --bin run_aec examples/voxel/showcase_world.json
-```
-
-### Repository Structure
-- `/src` - The core Rust compiler (`executor.rs`, `ast.rs`, etc.) and native modules (`/natives`).
-- `/examples` - Example AetherCore JSON files, including the voxel showcase (`/voxel`) and core features (`/core`).
-- `/tests` - Integration tests verifying AST execution and logic.
-- `/docs` - Documentation, JSON schemas (`aether_schema.json`), and specifications.
-- `/assets` - Textures and WGSL shaders.
+- A GPU compatible with Vulkan, Metal, or DX12 (for graphics features)
 
 ---
 
-# AetherCore (Deutsch)
-
-AetherCore ist eine leistungsoptimierte JIT-Laufzeitumgebung, die speziell für die KI-native Ausführung entwickelt wurde. Sie verarbeitet einen Turing-vollständigen JSON Abstract Syntax Tree (AST) direkt, wodurch der Overhead durch Text-Parsing für LLMs und autonome Agenten entfällt.
-
-## Kernphilosophie
-
-AetherCore basiert auf dem Prinzip, dass KI-Agenten nicht durch menschenlesbare Syntax eingeschränkt werden sollten. Durch die Nutzung eines strukturierten JSON-AST als Primärsprache bietet AetherCore eine direkte Schnittstelle für Agenten, um komplexe Logik mit maximaler Präzision und ohne Parsing-Ambiguität zu generieren und auszuführen.
-
-## Technische Highlights
-
-- **KI-Native Schnittstelle**: Reine JSON-basierte AST-Struktur für die direkte Code-Synthese durch Modelle.
-- **KI-Sicherheit & Validierung**: Integrierte AST-Validierung und ein formales JSON-Schema zur Sicherstellung der Code-Integrität vor der Ausführung.
-- **WGPU-Grafikbeschleunigung**: Hochleistungs-Backend für rechenintensive und visuelle Anwendungen.
-- **Modulare Architektur**: Unterstützung für skalierbare Codebasen durch ein natives Import-System.
-- **Turing-Vollständigkeit**: Native Unterstützung für Rekursion, Schleifen (`While`) und bedingte Verzweigungen (`If`).
-- **Standardbibliothek (StdLib)**: Optimierte Rust-Implementierungen für Mathematik, bitweise Operationen und Speicherverwaltung.
-
-## Technischer Showcase: Voxel-Engine POC
-
-Dieses Repository enthält eine Voxel-Engine als Proof-of-Concept. Dieser Showcase demonstriert die Leistungsfähigkeit von AetherCore:
-- Persistente Zustandsverwaltung in großflächigen Voxel-Karten.
-- Echtzeit-Physik und AABB-Kollisionserkennung.
-- Fortschrittliche WGSL-Shader mit gerichteter Beleuchtung und Nebel-Effekten.
-- Prozedurale Geländegenerierung mittels nativem Perlin-Rauschen.
-
-### Ausführung
-Um den AetherCore Voxel Showcase auszuführen:
-```bash
-cargo run --bin run_aec examples/voxel/showcase_world.json
-```
-
-### Repository-Struktur
-- `/src` - Der Kern-Rust-Compiler (`executor.rs`, `ast.rs`, etc.) und native Module (`/natives`).
-- `/examples` - AetherCore JSON-Beispieldateien, einschließlich Voxel-Showcase (`/voxel`) und Kernfunktionen (`/core`).
-- `/tests` - Integrationstests zur Überprüfung der AST-Ausführung und Logik.
-- `/docs` - Dokumentation, JSON-Schemas (`aether_schema.json`) und Spezifikationen.
-- `/assets` - Texturen und WGSL-Shader.
-
----
 **Designed for Machine Intelligence. Powered by Rust.**

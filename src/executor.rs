@@ -182,6 +182,12 @@ pub enum ExecResult {
     Fault(String),
 }
 
+impl Default for ExecutionEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ExecutionEngine {
     pub fn new() -> Self {
         let mut engine = Self {
@@ -615,10 +621,10 @@ impl ExecutionEngine {
 
     pub fn get_var(&self, name: &str) -> Option<RelType> {
         // Search Call Stack first (Local Scopes)
-        if let Some(frame) = self.call_stack.last() {
-            if let Some(val) = frame.locals.get(name) {
-                return Some(val.clone());
-            }
+        if let Some(frame) = self.call_stack.last()
+            && let Some(val) = frame.locals.get(name)
+        {
+            return Some(val.clone());
         }
         // Fallback to Global Memory
         self.memory.get(name).cloned()
@@ -914,7 +920,7 @@ impl ExecutionEngine {
                 ExecResult::Value(RelType::Array(vals))
             }
             Node::ArrayGet(var_name, index_node) => {
-                let val = match self.get_var(&var_name) {
+                let val = match self.get_var(var_name) {
                     Some(v) => v,
                     None => {
                         return ExecResult::Fault(format!(
@@ -945,7 +951,7 @@ impl ExecutionEngine {
                 }
             }
             Node::ArraySet(var_name, index_node, val_node) => {
-                let val = match self.get_var(&var_name) {
+                let val = match self.get_var(var_name) {
                     Some(v) => v,
                     None => {
                         return ExecResult::Fault(format!(
@@ -984,7 +990,7 @@ impl ExecutionEngine {
                 }
             }
             Node::ArrayPush(var_name, val_node) => {
-                let val = match self.get_var(&var_name) {
+                let val = match self.get_var(var_name) {
                     Some(v) => v,
                     None => {
                         return ExecResult::Fault(format!(
@@ -1007,7 +1013,7 @@ impl ExecutionEngine {
                 }
             }
             Node::ArrayLen(var_name) => {
-                let val = match self.get_var(&var_name) {
+                let val = match self.get_var(var_name) {
                     Some(v) => v,
                     None => {
                         return ExecResult::Fault(format!(
@@ -1873,7 +1879,7 @@ impl ExecutionEngine {
                         &mut self.staging_belt,
                     ) {
                         let c = [
-                            match &color_arr.get(0) {
+                            match &color_arr.first() {
                                 Some(RelType::Float(f)) => *f as f32,
                                 Some(RelType::Int(i)) => *i as f32,
                                 _ => 0.0,
@@ -2237,12 +2243,12 @@ impl ExecutionEngine {
                                     let is_pressed =
                                         key_ev.state == winit::event::ElementState::Pressed;
                                     if let winit::keyboard::Key::Named(k) = &key_ev.logical_key {
-                                        if is_pressed {
-                                            if let winit::keyboard::NamedKey::Backspace = k {
-                                                let mut kb =
-                                                    self.engine.keyboard_buffer.lock().unwrap();
-                                                kb.pop();
-                                            }
+                                        if is_pressed
+                                            && let winit::keyboard::NamedKey::Backspace = k
+                                        {
+                                            let mut kb =
+                                                self.engine.keyboard_buffer.lock().unwrap();
+                                            kb.pop();
                                         }
                                     } else if let winit::keyboard::Key::Character(c) =
                                         &key_ev.logical_key
@@ -2340,26 +2346,21 @@ impl ExecutionEngine {
                                                 // Amiga Sound Feedback with Random Pitch
                                                 if let Some((_stream, handle)) =
                                                     &self.engine.audio_stream_handle
-                                                {
-                                                    if let Some(sample_bytes) =
+                                                    && let Some(sample_bytes) =
                                                         self.engine.samples.get(&1)
+                                                {
+                                                    // Assume 1 is jump/break
+                                                    let cursor =
+                                                        std::io::Cursor::new(sample_bytes.clone());
+                                                    if let Ok(source) = rodio::Decoder::new(cursor)
                                                     {
-                                                        // Assume 1 is jump/break
-                                                        let cursor = std::io::Cursor::new(
-                                                            sample_bytes.clone(),
-                                                        );
-                                                        if let Ok(source) =
-                                                            rodio::Decoder::new(cursor)
-                                                        {
-                                                            use rodio::Source;
-                                                            let random_pitch =
-                                                                0.9 + (rand::random::<f32>() * 0.2);
-                                                            let source = source
-                                                                .amplify(1.0)
-                                                                .speed(random_pitch);
-                                                            let _ = handle
-                                                                .play_raw(source.convert_samples());
-                                                        }
+                                                        use rodio::Source;
+                                                        let random_pitch =
+                                                            0.9 + (rand::random::<f32>() * 0.2);
+                                                        let source =
+                                                            source.amplify(1.0).speed(random_pitch);
+                                                        let _ = handle
+                                                            .play_raw(source.convert_samples());
                                                     }
                                                 }
                                             }
@@ -2376,17 +2377,17 @@ impl ExecutionEngine {
                             _device_id: winit::event::DeviceId,
                             event: winit::event::DeviceEvent,
                         ) {
-                            if self.engine.camera_active {
-                                if let winit::event::DeviceEvent::MouseMotion { delta } = event {
-                                    self.engine.camera_yaw += delta.0 as f32 * 0.002;
-                                    self.engine.camera_pitch -= delta.1 as f32 * 0.002;
+                            if self.engine.camera_active
+                                && let winit::event::DeviceEvent::MouseMotion { delta } = event
+                            {
+                                self.engine.camera_yaw += delta.0 as f32 * 0.002;
+                                self.engine.camera_pitch -= delta.1 as f32 * 0.002;
 
-                                    let limit = std::f32::consts::FRAC_PI_2 - 0.01;
-                                    if self.engine.camera_pitch > limit {
-                                        self.engine.camera_pitch = limit;
-                                    } else if self.engine.camera_pitch < -limit {
-                                        self.engine.camera_pitch = -limit;
-                                    }
+                                let limit = std::f32::consts::FRAC_PI_2 - 0.01;
+                                if self.engine.camera_pitch > limit {
+                                    self.engine.camera_pitch = limit;
+                                } else if self.engine.camera_pitch < -limit {
+                                    self.engine.camera_pitch = -limit;
                                 }
                             }
                         }
@@ -2427,17 +2428,13 @@ impl ExecutionEngine {
 
                                         // Jump Sound Feedback (Sample ID 1)
                                         if let Some((_, handle)) = &self.engine.audio_stream_handle
+                                            && let Some(sample_bytes) = self.engine.samples.get(&1)
                                         {
-                                            if let Some(sample_bytes) = self.engine.samples.get(&1)
-                                            {
-                                                let cursor =
-                                                    std::io::Cursor::new(sample_bytes.clone());
-                                                if let Ok(source) = rodio::Decoder::new(cursor) {
-                                                    use rodio::Source;
-                                                    let source = source.amplify(0.5).speed(1.2);
-                                                    let _ =
-                                                        handle.play_raw(source.convert_samples());
-                                                }
+                                            let cursor = std::io::Cursor::new(sample_bytes.clone());
+                                            if let Ok(source) = rodio::Decoder::new(cursor) {
+                                                use rodio::Source;
+                                                let source = source.amplify(0.5).speed(1.2);
+                                                let _ = handle.play_raw(source.convert_samples());
                                             }
                                         }
                                     }
@@ -2484,11 +2481,10 @@ impl ExecutionEngine {
                                             .engine
                                             .voxel_map
                                             .contains_key(&[check_x, head_y, check_z])
+                                        && self.engine.velocity_y > 0.0
                                     {
-                                        if self.engine.velocity_y > 0.0 {
-                                            new_pos[1] = head_y as f32 - 0.1;
-                                            self.engine.velocity_y = 0.0;
-                                        }
+                                        new_pos[1] = head_y as f32 - 0.1;
+                                        self.engine.velocity_y = 0.0;
                                     }
 
                                     // 2. Move X & Z (WASD) - Only if not colliding
@@ -2619,9 +2615,9 @@ impl ExecutionEngine {
                                                 bytemuck::cast_slice(matrix_ref),
                                             );
                                             let cp = [
-                                                self.engine.camera_pos[0] as f32,
-                                                self.engine.camera_pos[1] as f32,
-                                                self.engine.camera_pos[2] as f32,
+                                                self.engine.camera_pos[0],
+                                                self.engine.camera_pos[1],
+                                                self.engine.camera_pos[2],
                                                 1.0f32,
                                             ];
                                             queue.write_buffer(ubo, 64, bytemuck::cast_slice(&cp));
@@ -2962,8 +2958,8 @@ impl ExecutionEngine {
                                                     sample += v_sample * 0.15;
                                                 }
                                             }
-                                            let int_sample = (sample.max(-1.0).min(1.0)
-                                                * f32::from(std::i16::MAX))
+                                            let int_sample = (sample.clamp(-1.0, 1.0)
+                                                * f32::from(i16::MAX))
                                                 as i16;
                                             for channel in frame.iter_mut() {
                                                 *channel = int_sample;
@@ -3024,9 +3020,8 @@ impl ExecutionEngine {
                                                     sample += v_sample * 0.15;
                                                 }
                                             }
-                                            let int_sample = ((sample.max(-1.0).min(1.0) * 0.5
-                                                + 0.5)
-                                                * f32::from(std::u16::MAX))
+                                            let int_sample = ((sample.clamp(-1.0, 1.0) * 0.5 + 0.5)
+                                                * f32::from(u16::MAX))
                                                 as u16;
                                             for channel in frame.iter_mut() {
                                                 *channel = int_sample;
@@ -3087,9 +3082,8 @@ impl ExecutionEngine {
                                                     sample += v_sample * 0.15;
                                                 }
                                             }
-                                            let int_sample = ((sample.max(-1.0).min(1.0) * 0.5
-                                                + 0.5)
-                                                * f32::from(std::u8::MAX))
+                                            let int_sample = ((sample.clamp(-1.0, 1.0) * 0.5 + 0.5)
+                                                * f32::from(u8::MAX))
                                                 as u8;
                                             for channel in frame.iter_mut() {
                                                 *channel = int_sample;
@@ -3123,7 +3117,7 @@ impl ExecutionEngine {
                     ExecResult::Value(RelType::Int(w)),
                 ) = (&self.voices, cv, fv, wv)
                 {
-                    if c >= 0 && c < 4 {
+                    if (0..4).contains(&c) {
                         let mut v_lock = voices.lock().unwrap();
                         v_lock[c as usize].active = true;
                         v_lock[c as usize].freq = f as f32;
@@ -3141,7 +3135,7 @@ impl ExecutionEngine {
             Node::StopNote(channel_node) => {
                 let cv = self.evaluate(channel_node);
                 if let (Some(voices), ExecResult::Value(RelType::Int(c))) = (&self.voices, cv) {
-                    if c >= 0 && c < 4 {
+                    if (0..4).contains(&c) {
                         let mut v_lock = voices.lock().unwrap();
                         v_lock[c as usize].active = false;
                         ExecResult::Value(RelType::Void)
@@ -3444,17 +3438,17 @@ impl ExecutionEngine {
                 ) = (xr, yr, zr, idr)
                 {
                     let x = match xv {
-                        RelType::Int(i) => i as i64,
+                        RelType::Int(i) => i,
                         RelType::Float(f) => f.floor() as i64,
                         _ => return ExecResult::Fault("SetVoxel X must be a Number".to_string()),
                     };
                     let y = match yv {
-                        RelType::Int(i) => i as i64,
+                        RelType::Int(i) => i,
                         RelType::Float(f) => f.floor() as i64,
                         _ => return ExecResult::Fault("SetVoxel Y must be a Number".to_string()),
                     };
                     let z = match zv {
-                        RelType::Int(i) => i as i64,
+                        RelType::Int(i) => i,
                         RelType::Float(f) => f.floor() as i64,
                         _ => return ExecResult::Fault("SetVoxel Z must be a Number".to_string()),
                     };
@@ -3549,10 +3543,10 @@ impl ExecutionEngine {
         let mut dist = 0.0;
 
         while dist < max_dist {
-            if let Some(&id) = self.voxel_map.get(&[x, y, z]) {
-                if id > 0 {
-                    return Some(([x, y, z], face_normal));
-                }
+            if let Some(&id) = self.voxel_map.get(&[x, y, z])
+                && id > 0
+            {
+                return Some(([x, y, z], face_normal));
             }
 
             if t_max_x < t_max_y {
@@ -3567,18 +3561,16 @@ impl ExecutionEngine {
                     z += step_z;
                     face_normal = [0, 0, -step_z];
                 }
+            } else if t_max_y < t_max_z {
+                dist = t_max_y;
+                t_max_y += t_delta_y;
+                y += step_y;
+                face_normal = [0, -step_y, 0];
             } else {
-                if t_max_y < t_max_z {
-                    dist = t_max_y;
-                    t_max_y += t_delta_y;
-                    y += step_y;
-                    face_normal = [0, -step_y, 0];
-                } else {
-                    dist = t_max_z;
-                    t_max_z += t_delta_z;
-                    z += step_z;
-                    face_normal = [0, 0, -step_z];
-                }
+                dist = t_max_z;
+                t_max_z += t_delta_z;
+                z += step_z;
+                face_normal = [0, 0, -step_z];
             }
         }
         None
