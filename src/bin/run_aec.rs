@@ -17,25 +17,41 @@ fn main() {
 
     // Normal JIT mode
     let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        eprintln!("Usage: run_aec [--check] <path_to.json>");
-        std::process::exit(1);
+
+    let mut is_check = false;
+    let mut no_opt = false;
+    let mut file_path = String::new();
+
+    for arg in args.iter().skip(1) {
+        if arg == "--check" {
+            is_check = true;
+        } else if arg == "--no-opt" {
+            no_opt = true;
+        } else {
+            file_path = arg.clone();
+        }
     }
 
-    let (is_check, file_path) = if args.len() >= 3 && args[1] == "--check" {
-        (true, &args[2])
-    } else if args.len() >= 2 {
-        (false, &args[1])
-    } else {
-        eprintln!("Usage: run_aec [--check] <path_to.json>");
+    if file_path.is_empty() {
+        eprintln!("Usage: run_aec [--check] [--no-opt] <path_to.json>");
         std::process::exit(1);
-    };
+    }
 
     println!("CWD: {:?}", env::current_dir().unwrap());
     println!("Loading AetherCore Script: {}", file_path);
 
-    let json_string = fs::read_to_string(file_path).expect("Failed to read file");
-    let ast = serde_json::from_str(&json_string).expect("Failed to parse AetherCore JSON AST");
+    let json_string = fs::read_to_string(&file_path).expect("Failed to read file");
+    let mut ast = serde_json::from_str(&json_string).expect("Failed to parse AetherCore JSON AST");
+
+    if !no_opt {
+        let before_nodes = aether_compiler::optimizer::count_nodes(&ast);
+        ast = aether_compiler::optimizer::optimize(ast);
+        let after_nodes = aether_compiler::optimizer::count_nodes(&ast);
+        println!(
+            "Compiler Optimization: Reduced AST from {} to {} nodes.",
+            before_nodes, after_nodes
+        );
+    }
 
     if is_check {
         use aether_compiler::validator::Validator;

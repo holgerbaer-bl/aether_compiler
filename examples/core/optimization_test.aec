@@ -1,0 +1,83 @@
+{
+  "Block": [
+    {
+      "Print": {
+        "StringLiteral": "[Optimization Test] Testing Constant Folding..."
+      }
+    },
+    {
+      "Assign": [
+        "result",
+        {
+          "Add": [
+            {
+              "Div": [
+                { "IntLiteral": 100 },
+                { "IntLiteral": 2 }
+              ]
+            },
+            {
+              "Mul": [
+                { "IntLiteral": 5 },
+                { "IntLiteral": 5 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Print": {
+        "Identifier": "result"
+      }
+    },
+    {
+      "If": [
+        {
+          "Eq": [
+            {
+              "Sub": [
+                { "IntLiteral": 50 },
+                { "IntLiteral": 25 }
+              ]
+            },
+            { "IntLiteral": 25 }
+          ]
+        },
+        {
+          "Block": [
+            {
+              "Print": {
+                "StringLiteral": "[Optimization Test] Logic Folded correctly!"
+              }
+            }
+          ]
+        },
+        {
+          "Block": [
+            {
+              "Print": {
+                "StringLiteral": "[Optimization Test] Logic Folded incorrectly!"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "If": [
+        { "BoolLiteral": false },
+        {
+          "Block": [
+            {
+              "Print": {
+                "StringLiteral": "This is dead code and should be eliminated!"
+              }
+            }
+          ]
+        },
+        null
+      ]
+    }
+  ]
+}
