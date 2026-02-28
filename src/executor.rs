@@ -60,6 +60,19 @@ pub struct MeshBuffers {
     pub index_count: u32,
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct VoxelVertex {
+    pub position: [f32; 3],
+    pub normal: [f32; 3],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct VoxelInstance {
+    pub instance_pos: [f32; 3],
+}
+
 pub struct ExecutionEngine {
     pub memory: HashMap<String, RelType>,
     pub event_loop: Option<EventLoop<()>>,
@@ -68,8 +81,26 @@ pub struct ExecutionEngine {
     pub device: Option<wgpu::Device>,
     pub queue: Option<wgpu::Queue>,
     pub config: Option<wgpu::SurfaceConfiguration>,
+    pub depth_texture_view: Option<wgpu::TextureView>,
     pub shaders: Vec<wgpu::ShaderModule>,
     pub render_pipelines: HashMap<usize, wgpu::RenderPipeline>,
+
+    // Voxel Engine (Sprint 12)
+    pub camera_active: bool,
+    pub camera_pos: [f32; 3],
+    pub camera_yaw: f32,
+    pub camera_pitch: f32,
+    pub camera_fov: f32,
+    pub input_w: bool,
+    pub input_a: bool,
+    pub input_s: bool,
+    pub input_d: bool,
+    pub voxel_pipeline: Option<wgpu::RenderPipeline>,
+    pub voxel_vbo: Option<wgpu::Buffer>,
+    pub voxel_ibo: Option<wgpu::Buffer>,
+    pub voxel_instances: Vec<[f32; 3]>,
+    pub voxel_bind_group: Option<wgpu::BindGroup>,
+    pub voxel_ubo: Option<wgpu::Buffer>,
 
     // Asset pipeline state
     pub meshes: Vec<MeshBuffers>,
@@ -114,8 +145,24 @@ impl ExecutionEngine {
             device: None,
             queue: None,
             config: None,
+            depth_texture_view: None,
             shaders: Vec::new(),
             render_pipelines: HashMap::new(),
+            camera_active: false,
+            camera_pos: [0.0, 1.0, 0.0],
+            camera_yaw: 0.0,
+            camera_pitch: 0.0,
+            camera_fov: 75.0,
+            input_w: false,
+            input_a: false,
+            input_s: false,
+            input_d: false,
+            voxel_pipeline: None,
+            voxel_vbo: None,
+            voxel_ibo: None,
+            voxel_instances: Vec::new(),
+            voxel_bind_group: None,
+            voxel_ubo: None,
             meshes: Vec::new(),
             textures: Vec::new(),
             glyph_brush: None,
@@ -130,6 +177,254 @@ impl ExecutionEngine {
             stream_pos: None,
             audio_stream: None,
         }
+    }
+
+    pub fn ensure_voxel_pipeline(&mut self) {
+        if self.voxel_pipeline.is_some() {
+            return;
+        }
+        let (device, config) = if let (Some(d), Some(c)) = (&self.device, &self.config) {
+            (d, c)
+        } else {
+            return;
+        };
+
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Voxel Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("voxel.wgsl").into()),
+        });
+
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+            label: Some("voxel_bind_group_layout"),
+        });
+
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Voxel Pipeline Layout"),
+            bind_group_layouts: &[&bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Voxel Pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[
+                    wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<VoxelVertex>() as wgpu::BufferAddress,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &[
+                            wgpu::VertexAttribute {
+                                offset: 0,
+                                shader_location: 0,
+                                format: wgpu::VertexFormat::Float32x3,
+                            },
+                            wgpu::VertexAttribute {
+                                offset: 12,
+                                shader_location: 1,
+                                format: wgpu::VertexFormat::Float32x3,
+                            },
+                        ],
+                    },
+                    wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<VoxelInstance>() as wgpu::BufferAddress,
+                        step_mode: wgpu::VertexStepMode::Instance,
+                        attributes: &[wgpu::VertexAttribute {
+                            offset: 0,
+                            shader_location: 2,
+                            format: wgpu::VertexFormat::Float32x3,
+                        }],
+                    },
+                ],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                unclipped_depth: false,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+
+        let v: f32 = 0.5;
+        let nx = [1.0, 0.0, 0.0];
+        let anx = [-1.0, 0.0, 0.0];
+        let ny = [0.0, 1.0, 0.0];
+        let any = [0.0, -1.0, 0.0];
+        let nz = [0.0, 0.0, 1.0];
+        let anz = [0.0, 0.0, -1.0];
+
+        let vertices = vec![
+            VoxelVertex {
+                position: [-v, v, -v],
+                normal: ny,
+            },
+            VoxelVertex {
+                position: [v, v, -v],
+                normal: ny,
+            },
+            VoxelVertex {
+                position: [v, v, v],
+                normal: ny,
+            },
+            VoxelVertex {
+                position: [-v, v, v],
+                normal: ny,
+            },
+            VoxelVertex {
+                position: [-v, -v, v],
+                normal: any,
+            },
+            VoxelVertex {
+                position: [v, -v, v],
+                normal: any,
+            },
+            VoxelVertex {
+                position: [v, -v, -v],
+                normal: any,
+            },
+            VoxelVertex {
+                position: [-v, -v, -v],
+                normal: any,
+            },
+            VoxelVertex {
+                position: [v, -v, -v],
+                normal: nx,
+            },
+            VoxelVertex {
+                position: [v, v, -v],
+                normal: nx,
+            },
+            VoxelVertex {
+                position: [v, v, v],
+                normal: nx,
+            },
+            VoxelVertex {
+                position: [v, -v, v],
+                normal: nx,
+            },
+            VoxelVertex {
+                position: [-v, -v, v],
+                normal: anx,
+            },
+            VoxelVertex {
+                position: [-v, v, v],
+                normal: anx,
+            },
+            VoxelVertex {
+                position: [-v, v, -v],
+                normal: anx,
+            },
+            VoxelVertex {
+                position: [-v, -v, -v],
+                normal: anx,
+            },
+            VoxelVertex {
+                position: [-v, -v, v],
+                normal: nz,
+            },
+            VoxelVertex {
+                position: [v, -v, v],
+                normal: nz,
+            },
+            VoxelVertex {
+                position: [v, v, v],
+                normal: nz,
+            },
+            VoxelVertex {
+                position: [-v, v, v],
+                normal: nz,
+            },
+            VoxelVertex {
+                position: [v, -v, -v],
+                normal: anz,
+            },
+            VoxelVertex {
+                position: [-v, -v, -v],
+                normal: anz,
+            },
+            VoxelVertex {
+                position: [-v, v, -v],
+                normal: anz,
+            },
+            VoxelVertex {
+                position: [v, v, -v],
+                normal: anz,
+            },
+        ];
+
+        let indices: Vec<u32> = vec![
+            0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4, 8, 9, 10, 10, 11, 8, 12, 13, 14, 14, 15, 12, 16,
+            17, 18, 18, 19, 16, 20, 21, 22, 22, 23, 20,
+        ];
+
+        let vbo = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Cube VBO"),
+            contents: bytemuck::cast_slice(&vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let ibo = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Cube IBO"),
+            contents: bytemuck::cast_slice(&indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        let c_matrix = [0.0f32; 16];
+        let ubo = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Camera UBO"),
+            contents: bytemuck::cast_slice(&c_matrix),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: ubo.as_entire_binding(),
+            }],
+            label: Some("Voxel Bind Group"),
+        });
+
+        self.voxel_pipeline = Some(pipeline);
+        self.voxel_vbo = Some(vbo);
+        self.voxel_ibo = Some(ibo);
+        self.voxel_bind_group = Some(bind_group);
+        self.voxel_ubo = Some(ubo);
     }
 
     pub fn execute(&mut self, root: &Node) -> String {
@@ -710,6 +1005,24 @@ impl ExecutionEngine {
                         desired_maximum_frame_latency: 2,
                     };
                     surface.configure(&device, &config);
+
+                    let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+                        label: Some("Depth Texture"),
+                        size: wgpu::Extent3d {
+                            width: config.width,
+                            height: config.height,
+                            depth_or_array_layers: 1,
+                        },
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: wgpu::TextureFormat::Depth32Float,
+                        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                            | wgpu::TextureUsages::TEXTURE_BINDING,
+                        view_formats: &[],
+                    });
+                    self.depth_texture_view =
+                        Some(depth_texture.create_view(&wgpu::TextureViewDescriptor::default()));
 
                     let static_surface = unsafe {
                         std::mem::transmute::<wgpu::Surface<'_>, wgpu::Surface<'static>>(surface)
@@ -1520,18 +1833,30 @@ impl ExecutionEngine {
                                     self.exit = true;
                                 }
                                 WindowEvent::KeyboardInput { event: key_ev, .. } => {
-                                    if key_ev.state == winit::event::ElementState::Pressed {
-                                        if let winit::keyboard::Key::Named(
-                                            winit::keyboard::NamedKey::Backspace,
-                                        ) = key_ev.logical_key
-                                        {
+                                    let is_pressed =
+                                        key_ev.state == winit::event::ElementState::Pressed;
+                                    if let winit::keyboard::Key::Named(k) = &key_ev.logical_key {
+                                        if is_pressed {
+                                            if let winit::keyboard::NamedKey::Backspace = k {
+                                                let mut kb =
+                                                    self.engine.keyboard_buffer.lock().unwrap();
+                                                kb.pop();
+                                            }
+                                        }
+                                    } else if let winit::keyboard::Key::Character(c) =
+                                        &key_ev.logical_key
+                                    {
+                                        if is_pressed {
                                             let mut kb =
                                                 self.engine.keyboard_buffer.lock().unwrap();
-                                            kb.pop();
-                                        } else if let Some(text) = &key_ev.text {
-                                            let mut kb =
-                                                self.engine.keyboard_buffer.lock().unwrap();
-                                            kb.push_str(text);
+                                            kb.push_str(c);
+                                        }
+                                        match c.as_str() {
+                                            "w" | "W" => self.engine.input_w = is_pressed,
+                                            "a" | "A" => self.engine.input_a = is_pressed,
+                                            "s" | "S" => self.engine.input_s = is_pressed,
+                                            "d" | "D" => self.engine.input_d = is_pressed,
+                                            _ => {}
                                         }
                                     }
                                 }
@@ -1544,13 +1869,82 @@ impl ExecutionEngine {
                                         config.width = physical_size.width.max(1);
                                         config.height = physical_size.height.max(1);
                                         surface.configure(device, config);
+
+                                        let depth_texture =
+                                            device.create_texture(&wgpu::TextureDescriptor {
+                                                label: Some("Depth Texture"),
+                                                size: wgpu::Extent3d {
+                                                    width: config.width,
+                                                    height: config.height,
+                                                    depth_or_array_layers: 1,
+                                                },
+                                                mip_level_count: 1,
+                                                sample_count: 1,
+                                                dimension: wgpu::TextureDimension::D2,
+                                                format: wgpu::TextureFormat::Depth32Float,
+                                                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                                                    | wgpu::TextureUsages::TEXTURE_BINDING,
+                                                view_formats: &[],
+                                            });
+                                        self.engine.depth_texture_view =
+                                            Some(depth_texture.create_view(
+                                                &wgpu::TextureViewDescriptor::default(),
+                                            ));
                                     }
                                 }
                                 _ => {}
                             }
                         }
 
+                        fn device_event(
+                            &mut self,
+                            _event_loop: &ActiveEventLoop,
+                            _device_id: winit::event::DeviceId,
+                            event: winit::event::DeviceEvent,
+                        ) {
+                            if self.engine.camera_active {
+                                if let winit::event::DeviceEvent::MouseMotion { delta } = event {
+                                    self.engine.camera_yaw += delta.0 as f32 * 0.002;
+                                    self.engine.camera_pitch -= delta.1 as f32 * 0.002;
+
+                                    let limit = std::f32::consts::FRAC_PI_2 - 0.01;
+                                    if self.engine.camera_pitch > limit {
+                                        self.engine.camera_pitch = limit;
+                                    } else if self.engine.camera_pitch < -limit {
+                                        self.engine.camera_pitch = -limit;
+                                    }
+                                }
+                            }
+                        }
+
                         fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+                            if self.engine.camera_active {
+                                let speed = 0.05;
+                                let yaw = self.engine.camera_yaw;
+                                let (sy, cy) = yaw.sin_cos();
+                                let mut dx = 0.0;
+                                let mut dz = 0.0;
+
+                                if self.engine.input_w {
+                                    dx -= sy * speed;
+                                    dz -= cy * speed;
+                                }
+                                if self.engine.input_s {
+                                    dx += sy * speed;
+                                    dz += cy * speed;
+                                }
+                                if self.engine.input_a {
+                                    dx -= cy * speed;
+                                    dz += sy * speed;
+                                }
+                                if self.engine.input_d {
+                                    dx += cy * speed;
+                                    dz -= sy * speed;
+                                }
+                                self.engine.camera_pos[0] += dx;
+                                self.engine.camera_pos[2] += dz;
+                            }
+
                             let egui_ctx = self.engine.egui_ctx.clone();
                             if let (Some(ctx), Some(state), Some(window)) =
                                 (&egui_ctx, &mut self.engine.egui_state, &self.engine.window)
@@ -1561,6 +1955,12 @@ impl ExecutionEngine {
 
                             let res = self.engine.evaluate(self.body);
 
+                            let has_voxels = self.engine.camera_active
+                                && !self.engine.voxel_instances.is_empty();
+                            if has_voxels {
+                                self.engine.ensure_voxel_pipeline();
+                            }
+
                             if let (
                                 Some(ctx),
                                 Some(state),
@@ -1570,6 +1970,7 @@ impl ExecutionEngine {
                                 Some(surface),
                                 Some(window),
                                 Some(config),
+                                depth_view_opt,
                             ) = (
                                 &self.engine.egui_ctx,
                                 &mut self.engine.egui_state,
@@ -1579,6 +1980,7 @@ impl ExecutionEngine {
                                 &self.engine.surface,
                                 &self.engine.window,
                                 &self.engine.config,
+                                &self.engine.depth_texture_view,
                             ) {
                                 let full_output = ctx.end_pass();
                                 state.handle_platform_output(
@@ -1605,6 +2007,122 @@ impl ExecutionEngine {
                                         &wgpu::CommandEncoderDescriptor::default(),
                                     );
 
+                                    let has_voxels = self.engine.camera_active
+                                        && !self.engine.voxel_instances.is_empty();
+
+                                    if has_voxels {
+                                        let aspect = config.width as f32 / config.height as f32;
+                                        let proj = cgmath::perspective(
+                                            cgmath::Deg(self.engine.camera_fov),
+                                            aspect,
+                                            0.1,
+                                            1000.0,
+                                        );
+                                        let pos = cgmath::Point3::new(
+                                            self.engine.camera_pos[0],
+                                            self.engine.camera_pos[1],
+                                            self.engine.camera_pos[2],
+                                        );
+
+                                        let yaw = self.engine.camera_yaw;
+                                        let pitch = self.engine.camera_pitch;
+                                        let (sy, cy) = yaw.sin_cos();
+                                        let (sp, cp) = pitch.sin_cos();
+
+                                        use cgmath::InnerSpace;
+                                        let forward =
+                                            cgmath::Vector3::new(sy * cp, sp, cy * cp).normalize();
+                                        let view_mat = cgmath::Matrix4::look_to_rh(
+                                            pos,
+                                            forward,
+                                            cgmath::Vector3::unit_y(),
+                                        );
+                                        let view_proj = proj * view_mat;
+
+                                        let matrix_ref: &[f32; 16] = view_proj.as_ref();
+
+                                        if let Some(ubo) = &self.engine.voxel_ubo {
+                                            queue.write_buffer(
+                                                ubo,
+                                                0,
+                                                bytemuck::cast_slice(matrix_ref),
+                                            );
+                                        }
+
+                                        let instance_buf = device.create_buffer_init(
+                                            &wgpu::util::BufferInitDescriptor {
+                                                label: Some("Instance Buffer"),
+                                                contents: bytemuck::cast_slice(
+                                                    &self.engine.voxel_instances,
+                                                ),
+                                                usage: wgpu::BufferUsages::VERTEX,
+                                            },
+                                        );
+
+                                        if let (
+                                            Some(pipeline),
+                                            Some(vbo),
+                                            Some(ibo),
+                                            Some(bind_group),
+                                            Some(depth_view),
+                                        ) = (
+                                            &self.engine.voxel_pipeline,
+                                            &self.engine.voxel_vbo,
+                                            &self.engine.voxel_ibo,
+                                            &self.engine.voxel_bind_group,
+                                            depth_view_opt.as_ref(),
+                                        ) {
+                                            let mut rpass =
+                                                encoder
+                                                    .begin_render_pass(&wgpu::RenderPassDescriptor {
+                                                    label: Some("Voxel Pass"),
+                                                    color_attachments: &[Some(
+                                                        wgpu::RenderPassColorAttachment {
+                                                            view: &view,
+                                                            resolve_target: None,
+                                                            ops: wgpu::Operations {
+                                                                load: wgpu::LoadOp::Clear(
+                                                                    wgpu::Color {
+                                                                        r: 0.5,
+                                                                        g: 0.8,
+                                                                        b: 0.9,
+                                                                        a: 1.0,
+                                                                    },
+                                                                ),
+                                                                store: wgpu::StoreOp::Store,
+                                                            },
+                                                        },
+                                                    )],
+                                                    depth_stencil_attachment: Some(
+                                                        wgpu::RenderPassDepthStencilAttachment {
+                                                            view: depth_view,
+                                                            depth_ops: Some(wgpu::Operations {
+                                                                load: wgpu::LoadOp::Clear(1.0),
+                                                                store: wgpu::StoreOp::Store,
+                                                            }),
+                                                            stencil_ops: None,
+                                                        },
+                                                    ),
+                                                    timestamp_writes: None,
+                                                    occlusion_query_set: None,
+                                                });
+
+                                            rpass.set_pipeline(pipeline);
+                                            rpass.set_bind_group(0, bind_group, &[]);
+                                            rpass.set_vertex_buffer(0, vbo.slice(..));
+                                            rpass.set_vertex_buffer(1, instance_buf.slice(..));
+                                            rpass.set_index_buffer(
+                                                ibo.slice(..),
+                                                wgpu::IndexFormat::Uint32,
+                                            );
+                                            rpass.draw_indexed(
+                                                0..36,
+                                                0,
+                                                0..self.engine.voxel_instances.len() as u32,
+                                            );
+                                        }
+                                    }
+
                                     renderer.update_buffers(
                                         device,
                                         queue,
@@ -1622,19 +2140,38 @@ impl ExecutionEngine {
                                                             view: &view,
                                                             resolve_target: None,
                                                             ops: wgpu::Operations {
-                                                                load: wgpu::LoadOp::Clear(
-                                                                    wgpu::Color {
-                                                                        r: 0.05,
-                                                                        g: 0.05,
-                                                                        b: 0.05,
-                                                                        a: 1.0,
-                                                                    },
-                                                                ),
+                                                                load: if has_voxels {
+                                                                    wgpu::LoadOp::Load
+                                                                } else {
+                                                                    wgpu::LoadOp::Clear(
+                                                                        wgpu::Color {
+                                                                            r: 0.05,
+                                                                            g: 0.05,
+                                                                            b: 0.05,
+                                                                            a: 1.0,
+                                                                        },
+                                                                    )
+                                                                },
                                                                 store: wgpu::StoreOp::Store,
                                                             },
                                                         },
                                                     )],
-                                                    depth_stencil_attachment: None,
+                                                    depth_stencil_attachment: depth_view_opt
+                                                        .as_ref()
+                                                        .map(|dv| {
+                                                            wgpu::RenderPassDepthStencilAttachment {
+                                                                view: dv,
+                                                                depth_ops: Some(wgpu::Operations {
+                                                                    load: if has_voxels {
+                                                                        wgpu::LoadOp::Load
+                                                                    } else {
+                                                                        wgpu::LoadOp::Clear(1.0)
+                                                                    },
+                                                                    store: wgpu::StoreOp::Store,
+                                                                }),
+                                                                stencil_ops: None,
+                                                            }
+                                                        }),
                                                     timestamp_writes: None,
                                                     occlusion_query_set: None,
                                                     label: Some("egui render pass"),
@@ -2041,6 +2578,58 @@ impl ExecutionEngine {
                     }
                 }
                 ExecResult::Value(RelType::Void) // while evaluate returns void naturally unless return hits
+            }
+            Node::InitCamera(fov_node) => {
+                let fov_res = self.evaluate(fov_node);
+                if let ExecResult::Value(RelType::Float(f)) = fov_res {
+                    self.camera_fov = f as f32;
+                    self.camera_active = true;
+                    if let Some(window) = &self.window {
+                        let _ = window.set_cursor_grab(winit::window::CursorGrabMode::Confined);
+                        window.set_cursor_visible(false);
+                    }
+                    ExecResult::Value(RelType::Void)
+                } else {
+                    ExecResult::Fault("InitCamera expects (Float FOV)".to_string())
+                }
+            }
+            Node::DrawVoxelGrid(positions_node) => {
+                let pos_res = self.evaluate(positions_node);
+                if let ExecResult::Value(RelType::Array(positions)) = pos_res {
+                    self.voxel_instances.clear();
+                    let mut i = 0;
+                    while i + 2 < positions.len() {
+                        let mut x_f = 0.0;
+                        let mut y_f = 0.0;
+                        let mut z_f = 0.0;
+
+                        if let RelType::Float(f) = positions[i] {
+                            x_f = f as f32;
+                        } else if let RelType::Int(f) = positions[i] {
+                            x_f = f as f32;
+                        }
+
+                        if let RelType::Float(f) = positions[i + 1] {
+                            y_f = f as f32;
+                        } else if let RelType::Int(f) = positions[i + 1] {
+                            y_f = f as f32;
+                        }
+
+                        if let RelType::Float(f) = positions[i + 2] {
+                            z_f = f as f32;
+                        } else if let RelType::Int(f) = positions[i + 2] {
+                            z_f = f as f32;
+                        }
+
+                        self.voxel_instances.push([x_f, y_f, z_f]);
+                        i += 3;
+                    }
+                    ExecResult::Value(RelType::Void)
+                } else {
+                    ExecResult::Fault(
+                        "DrawVoxelGrid expects a flat Array of XYZ floats".to_string(),
+                    )
+                }
             }
             Node::Block(nodes) => {
                 let mut last_val = RelType::Void;

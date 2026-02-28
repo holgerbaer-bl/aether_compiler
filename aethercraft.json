@@ -1,0 +1,295 @@
+{
+    "Block": [
+        {
+            "InitWindow": [
+                {
+                    "IntLiteral": 1280
+                },
+                {
+                    "IntLiteral": 720
+                },
+                {
+                    "StringLiteral": "AetherCraft Foundation"
+                }
+            ]
+        },
+        "InitGraphics",
+        {
+            "InitCamera": {
+                "FloatLiteral": 90.0
+            }
+        },
+        {
+            "Assign": [
+                "world_blocks",
+                {
+                    "ArrayLiteral": [
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": 0.0
+                        },
+                        {
+                            "FloatLiteral": -1.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": 0.0
+                        },
+                        {
+                            "FloatLiteral": 0.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": 0.0
+                        },
+                        {
+                            "FloatLiteral": 1.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": 0.0
+                        },
+                        {
+                            "FloatLiteral": 2.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": 0.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": -1.0
+                        },
+                        {
+                            "FloatLiteral": -1.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": -1.0
+                        },
+                        {
+                            "FloatLiteral": 0.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": -1.0
+                        },
+                        {
+                            "FloatLiteral": 1.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": -1.0
+                        },
+                        {
+                            "FloatLiteral": 2.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": -1.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": -1.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": 0.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": 1.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": 2.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": 1.0
+                        },
+                        {
+                            "FloatLiteral": -1.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": 1.0
+                        },
+                        {
+                            "FloatLiteral": 0.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": 1.0
+                        },
+                        {
+                            "FloatLiteral": 1.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": 1.0
+                        },
+                        {
+                            "FloatLiteral": 2.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": 1.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": 2.0
+                        },
+                        {
+                            "FloatLiteral": -1.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": 2.0
+                        },
+                        {
+                            "FloatLiteral": 0.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": 2.0
+                        },
+                        {
+                            "FloatLiteral": 1.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": 2.0
+                        },
+                        {
+                            "FloatLiteral": 2.0
+                        },
+                        {
+                            "FloatLiteral": -2.0
+                        },
+                        {
+                            "FloatLiteral": 2.0
+                        },
+                        {
+                            "FloatLiteral": 0.0
+                        },
+                        {
+                            "FloatLiteral": -1.0
+                        },
+                        {
+                            "FloatLiteral": -5.0
+                        },
+                        {
+                            "FloatLiteral": 0.0
+                        },
+                        {
+                            "FloatLiteral": 0.0
+                        },
+                        {
+                            "FloatLiteral": -5.0
+                        },
+                        {
+                            "FloatLiteral": 0.0
+                        },
+                        {
+                            "FloatLiteral": 1.0
+                        },
+                        {
+                            "FloatLiteral": -5.0
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "PollEvents": {
+                "Block": [
+                    {
+                        "DrawVoxelGrid": {
+                            "Identifier": "world_blocks"
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

@@ -13,9 +13,6 @@ path = "src/bin/run_aec.rs"
 name = "aether_build"
 path = "src/bin/aether_build.rs"
 
-[[bin]]
-name = "_aether_temp_launcher"
-path = "src/bin/_aether_temp_launcher.rs"
 
 [dependencies]
 bytemuck = { version = "1.25.0", features = ["derive"] }
@@ -33,3 +30,4 @@ serde_json = "1.0.149"
 egui = "0.30"
 egui-wgpu = "0.30"
 egui-winit = "0.30"
+cgmath = "0.18"

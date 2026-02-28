@@ -64,8 +64,10 @@ Operations take a left-hand side (`lhs`) and right-hand side (`rhs`).
 ### 4.8. 3D Graphics (Vulkan/Metal/DX12 via WGPU)
 *   **`InitWindow(Box<Node>, Box<Node>, Box<Node>)`**: Initializes an OS Window (Width, Height, Title). Opens the window on the system.
 *   **`InitGraphics()`**: Initializes the GPU Adapter and Device.
+*   **`InitCamera(Box<Node>)`**: Initializes the First-Person Camera capturing mouse bounds and WASD translation natively. Parameter is a Float field-of-view (FOV).
 *   **`LoadShader(Box<Node>)`**: Compiles a WGSL Shader from a String. Returns a Shader Identifier.
 *   **`RenderMesh(Box<Node>, Box<Node>, Box<Node>)`**: Executes a RenderPass draw call to the screen (Shader Identifier, Vertex Buffer Array, MVP Matrix Uniform Array).
+*   **`DrawVoxelGrid(Box<Node>)`**: Pre-calculates instanced rendering payload pipelines mapped efficiently referencing a linear memory Array of XYZ Float primitives corresponding to cube anchors.
 *   **`PollEvents(Box<Node>)`**: Submits a block of nodes to run inside the Window Event Loop, intercepting close requests.
 
 ### 4.9. 8-Bit Audio Engine (CPAL FFI)

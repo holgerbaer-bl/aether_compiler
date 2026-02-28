@@ -75,6 +75,10 @@ pub enum Node {
     UIButton(Box<Node>),            // Text (String). Evaluates to Boolean (Clicked)
     UITextInput(Box<Node>),         // Variable Name to bind to (String)
 
+    // Voxel Engine (Sprint 12)
+    InitCamera(Box<Node>),    // FOV (Float). Activates 3D FPS camera
+    DrawVoxelGrid(Box<Node>), // Array of Positions (XYZ layout)
+
     // Control Flow
     If(Box<Node>, Box<Node>, Option<Box<Node>>),
     While(Box<Node>, Box<Node>),
