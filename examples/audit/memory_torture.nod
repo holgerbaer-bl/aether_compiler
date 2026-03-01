@@ -1,0 +1,21 @@
+{
+  "Block": [
+    { "Print": { "StringLiteral": "--- JIT vs AOT Torture Test ---" } },
+    { "Block": [
+        { "Assign": ["a", { "NativeCall": ["registry_create_counter", []] }] },
+        { "Assign": ["b", { "NativeCall": ["registry_create_counter", []] }] },
+        { "Assign": ["i", { "IntLiteral": 0 }] },
+        { "While": [
+            { "Lt": [{ "Identifier": "i" }, { "IntLiteral": 3 }] },
+            { "Block": [
+                { "Assign": ["dummy", { "NativeCall": ["registry_create_counter", []] }] },
+                { "Assign": ["dummy", { "IntLiteral": 999 }] },
+                { "Assign": ["a", { "NativeCall": ["registry_create_counter", []] }] },
+                { "Assign": ["i", { "Add": [{ "Identifier": "i" }, { "IntLiteral": 1 }] }] }
+            ]}
+        ]}
+    ]},
+    { "Print": { "StringLiteral": "Final Active Registry Nodes (Must be 0):" } },
+    { "Print": { "NativeCall": ["registry_dump", []] } }
+  ]
+}

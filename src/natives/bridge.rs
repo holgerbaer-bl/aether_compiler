@@ -423,6 +423,10 @@ impl BridgeModule for CoreBridge {
                         "[FFI] registry_window_close expects 1 Handle arg".to_string(),
                     ))
                 }
+                "registry_dump" => {
+                    let total = crate::natives::registry::registry_dump();
+                    Some(ExecResult::Value(RelType::Int(total)))
+                }
                 _ => None,
             }
         } else {

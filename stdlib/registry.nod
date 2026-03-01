@@ -10,6 +10,7 @@
 
     { "FnDef": ["registry_create_window", ["w", "h", "title"], { "Block": [{ "Return": { "ExternCall": { "module": "registry", "function": "registry_create_window", "args": [{ "Identifier": "w" }, { "Identifier": "h" }, { "Identifier": "title" }] } } }] } ] },
     { "FnDef": ["registry_window_update", ["id"], { "Block": [{ "Return": { "ExternCall": { "module": "registry", "function": "registry_window_update", "args": [{ "Identifier": "id" }] } } }] } ] },
-    { "FnDef": ["registry_window_close", ["id"], { "Block": [{ "Return": { "ExternCall": { "module": "registry", "function": "registry_window_close", "args": [{ "Identifier": "id" }] } } }] } ] }
+    { "FnDef": ["registry_window_close", ["id"], { "Block": [{ "Return": { "ExternCall": { "module": "registry", "function": "registry_window_close", "args": [{ "Identifier": "id" }] } } }] } ] },
+    { "FnDef": ["registry_dump", [], { "Block": [{ "Return": { "ExternCall": { "module": "registry", "function": "registry_dump", "args": [] } } }] } ] }
   ]
 }

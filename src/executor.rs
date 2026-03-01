@@ -636,12 +636,30 @@ impl ExecutionEngine {
         // Mutate in existing outer scope if it exists so while-loops don't shadow iterators natively
         for frame in self.call_stack.iter_mut().rev() {
             if frame.locals.contains_key(&name) {
+                if let Some(RelType::Handle(id)) = frame.locals.get(&name) {
+                    if let RelType::Handle(new_id) = &val {
+                        if id != new_id {
+                            crate::natives::registry::registry_release(*id);
+                        }
+                    } else {
+                        crate::natives::registry::registry_release(*id);
+                    }
+                }
                 frame.locals.insert(name, val);
                 return;
             }
         }
 
         if let Some(frame) = self.call_stack.last_mut() {
+            if let Some(RelType::Handle(id)) = frame.locals.get(&name) {
+                if let RelType::Handle(new_id) = &val {
+                    if id != new_id {
+                        crate::natives::registry::registry_release(*id);
+                    }
+                } else {
+                    crate::natives::registry::registry_release(*id);
+                }
+            }
             frame.locals.insert(name, val);
         } else {
             self.memory.insert(name, val);

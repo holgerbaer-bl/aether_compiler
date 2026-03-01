@@ -65,8 +65,24 @@ impl Codegen {
                 }
 
                 if already_exists {
-                    // Assume it doesn't change from non-handle to handle
-                    format!("{} = {}", name, inner)
+                    let mut previously_was_handle = false;
+                    for scope in self.scopes.iter_mut().rev() {
+                        if let Some(was_handle) = scope.get(name) {
+                            previously_was_handle = *was_handle;
+                            scope.insert(name.clone(), is_handle);
+                            break;
+                        }
+                    }
+
+                    if previously_was_handle {
+                        // Drop former handle before reassignment
+                        format!(
+                            "registry::registry_release({});\n    {} = {}",
+                            name, name, inner
+                        )
+                    } else {
+                        format!("{} = {}", name, inner)
+                    }
                 } else {
                     if let Some(current_scope) = self.scopes.last_mut() {
                         current_scope.insert(name.clone(), is_handle);

@@ -146,6 +146,26 @@ pub fn registry_free(handle_id: i64) {
     });
 }
 
+pub fn registry_dump() -> i64 {
+    let mut count = 0;
+    with_registry(|registry| {
+        println!("[KnotenCore Registry] --- MEMORY DUMP ---");
+        for (id, entry) in registry.iter() {
+            let handle_type = match &entry.handle {
+                NativeHandle::Counter(_) => "Counter",
+                NativeHandle::Window(_) => "Window",
+            };
+            println!(
+                "   -> Handle {} [Type: {}, RefCount: {}]",
+                id, handle_type, entry.ref_count
+            );
+            count += 1;
+        }
+        println!("[KnotenCore Registry] Total Active: {}", count);
+    });
+    count
+}
+
 // ── Window Orchestration ─────────────────────────────────────────
 
 pub fn registry_create_window(width: i64, height: i64, title: String) -> i64 {

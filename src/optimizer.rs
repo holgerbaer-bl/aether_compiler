@@ -479,6 +479,11 @@ impl TypeChecker {
             Node::Add(l, r) | Node::Sub(l, r) | Node::Mul(l, r) | Node::Div(l, r) => {
                 let lt = self.check(l)?;
                 let rt = self.check(r)?;
+                if lt == Type::Handle || rt == Type::Handle {
+                    self.errors.push(format!(
+                        "TypeError: Cannot perform mathematics on Handle pointers"
+                    ));
+                }
                 if lt != rt && lt != Type::Any && rt != Type::Any {
                     self.errors
                         .push(format!("TypeError: Math mismatch {:?} and {:?}", lt, rt));
