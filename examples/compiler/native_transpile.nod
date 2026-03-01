@@ -1,0 +1,14 @@
+{
+  "Block": [
+    { "Print": { "StringLiteral": "Creating handle" } },
+    { "Block": [
+        { "Assign": ["counter_id", { "NativeCall": ["registry_create_counter", []] }] },
+        { "NativeCall": ["registry_increment", [{ "Identifier": "counter_id" }]] },
+        { "NativeCall": ["registry_increment", [{ "Identifier": "counter_id" }]] },
+        { "NativeCall": ["registry_increment", [{ "Identifier": "counter_id" }]] },
+        { "Print": { "NativeCall": ["registry_get_value", [{ "Identifier": "counter_id" }]] } }
+      ]
+    },
+    { "Print": { "StringLiteral": "Handle should be dropped!" } }
+  ]
+}

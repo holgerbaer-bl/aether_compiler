@@ -1,14 +1,14 @@
 use crate::ast::Node;
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 pub struct Codegen {
-    pub scopes: Vec<HashSet<String>>,
+    pub scopes: Vec<HashMap<String, bool>>,
 }
 
 impl Codegen {
     pub fn new() -> Self {
         Self {
-            scopes: vec![HashSet::new()],
+            scopes: vec![HashMap::new()],
         }
     }
 
@@ -17,17 +17,26 @@ impl Codegen {
             Node::Block(nodes) => {
                 let mut out = String::new();
                 if is_root {
+                    out.push_str("use knoten_core::natives::registry;\n\n");
                     out.push_str("fn main() {\n");
                 } else {
                     out.push_str("{\n");
                 }
 
                 // Push new scope
-                self.scopes.push(HashSet::new());
+                self.scopes.push(HashMap::new());
 
                 for n in nodes {
                     let line = self.generate(n, false);
                     out.push_str(&format!("    {};\n", line));
+                }
+
+                // Identify handles to drop
+                let current_scope = self.scopes.last().unwrap();
+                for (var_name, is_handle) in current_scope {
+                    if *is_handle {
+                        out.push_str(&format!("    registry::registry_release({});\n", var_name));
+                    }
                 }
 
                 // Pop scope
@@ -46,16 +55,21 @@ impl Codegen {
             }
             Node::Assign(name, expr) => {
                 let inner = self.generate(expr, false);
+                let already_exists = self.scopes.iter().any(|s| s.contains_key(name));
 
-                let already_exists = self.scopes.iter().any(|s| s.contains(name));
+                let mut is_handle = false;
+                if let Node::NativeCall(fn_name, _) = &**expr {
+                    if fn_name == "registry_create_counter" || fn_name == "registry_create_window" {
+                        is_handle = true;
+                    }
+                }
 
                 if already_exists {
-                    // Variable already exists in an outer or current scope
+                    // Assume it doesn't change from non-handle to handle
                     format!("{} = {}", name, inner)
                 } else {
-                    // Variable was not in any HashSet, declare it in current scope
                     if let Some(current_scope) = self.scopes.last_mut() {
-                        current_scope.insert(name.clone());
+                        current_scope.insert(name.clone(), is_handle);
                     }
                     format!("let mut {} = {}", name, inner)
                 }
@@ -121,8 +135,15 @@ impl Codegen {
                     self.generate(body, false)
                 )
             }
-            // Sprint 38/39 MVP support boundary
-            _ => format!("/* Unsupported node in Sprint 39 codegen: {:?} */", node),
+            Node::NativeCall(fn_name, args) => {
+                let mut arg_strs = Vec::new();
+                for a in args {
+                    arg_strs.push(self.generate(a, false));
+                }
+                format!("registry::{}({})", fn_name, arg_strs.join(", "))
+            }
+            // Sprint 38/39/40 MVP support boundary
+            _ => format!("/* Unsupported node in Sprint 40 codegen: {:?} */", node),
         }
     }
 }
