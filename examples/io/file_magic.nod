@@ -1,0 +1,11 @@
+{
+  "Block": [
+    { "Print": { "StringLiteral": "--- KnotenCore OS File Execution ---" } },
+    { "Block": [
+        { "Assign": ["my_file", { "NativeCall": ["registry_file_create", [{ "StringLiteral": "knoten_test.txt" }]] }] },
+        { "NativeCall": ["registry_file_write", [{ "Identifier": "my_file" }, { "StringLiteral": "KnotenCore AOT/JIT Persistence Success!" }]] },
+        { "Print": { "StringLiteral": "File explicitly written into Rust OS wrapper block bounds natively." } }
+    ]},
+    { "Print": { "NativeCall": ["registry_dump", []] } }
+  ]
+}

@@ -59,7 +59,10 @@ impl Codegen {
 
                 let mut is_handle = false;
                 if let Node::NativeCall(fn_name, _) = &**expr {
-                    if fn_name == "registry_create_counter" || fn_name == "registry_create_window" {
+                    if fn_name == "registry_create_counter"
+                        || fn_name == "registry_create_window"
+                        || fn_name == "registry_file_create"
+                    {
                         is_handle = true;
                     }
                 }

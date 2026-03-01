@@ -259,6 +259,9 @@ impl ExecutionEngine {
         engine
             .native_modules
             .push(Box::new(crate::natives::io::IoModule));
+        engine
+            .native_modules
+            .push(Box::new(crate::natives::registry::RegistryModule));
 
         engine
     }

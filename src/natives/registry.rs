@@ -1,5 +1,7 @@
 use minifb::{Window, WindowOptions};
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::Write;
 use std::sync::Mutex;
 
 // Wrapper for Window to bypass non-Send restriction. Safe because our executor is single-threaded.
@@ -18,6 +20,7 @@ pub struct RegistryWindowState {
 pub enum NativeHandle {
     Counter(StatefulCounter),
     Window(SendWindow),
+    File(File),
 }
 
 pub struct RegistryEntry {
@@ -154,6 +157,7 @@ pub fn registry_dump() -> i64 {
             let handle_type = match &entry.handle {
                 NativeHandle::Counter(_) => "Counter",
                 NativeHandle::Window(_) => "Window",
+                NativeHandle::File(_) => "File",
             };
             println!(
                 "   -> Handle {} [Type: {}, RefCount: {}]",
@@ -226,4 +230,64 @@ pub fn registry_window_update(handle_id: i64) -> bool {
 pub fn registry_window_close(handle_id: i64) {
     // Closing the window is as simple as freeing its handle!
     registry_free(handle_id);
+}
+
+// ── File IO Orchestration ─────────────────────────────────────────
+
+pub fn registry_file_create(path: String) -> i64 {
+    let mut id_guard = COUNTER_NEXT_ID.lock().unwrap();
+    let id = *id_guard;
+    *id_guard += 1;
+
+    match File::create(&path) {
+        Ok(file) => {
+            with_registry(|registry| {
+                registry.insert(
+                    id,
+                    RegistryEntry {
+                        handle: NativeHandle::File(file),
+                        ref_count: 1,
+                    },
+                );
+            });
+            id as i64
+        }
+        Err(e) => {
+            eprintln!("[KnotenCore FileIO] Error creating file '{}': {}", path, e);
+            -1
+        }
+    }
+}
+
+pub fn registry_file_write(handle_id: i64, content: String) {
+    let id = handle_id as usize;
+    with_registry(|registry| {
+        if let Some(entry) = registry.get_mut(&id) {
+            if let NativeHandle::File(file) = &mut entry.handle {
+                if let Err(e) = file.write_all(content.as_bytes()) {
+                    eprintln!(
+                        "[KnotenCore FileIO] Failed to write to file handle {}: {}",
+                        handle_id, e
+                    );
+                }
+            } else {
+                eprintln!("[KnotenCore FileIO] Handle {} is not a File.", handle_id);
+            }
+        } else {
+            eprintln!("[KnotenCore FileIO] Handle {} not found.", handle_id);
+        }
+    });
+}
+
+pub struct RegistryModule;
+
+impl crate::natives::NativeModule for RegistryModule {
+    fn handle(
+        &self,
+        func_name: &str,
+        args: &[crate::executor::RelType],
+    ) -> Option<crate::executor::ExecResult> {
+        use crate::natives::bridge::BridgeModule;
+        crate::natives::bridge::CoreBridge.handle("registry", func_name, args)
+    }
 }

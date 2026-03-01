@@ -427,6 +427,28 @@ impl BridgeModule for CoreBridge {
                     let total = crate::natives::registry::registry_dump();
                     Some(ExecResult::Value(RelType::Int(total)))
                 }
+                "registry_file_create" => {
+                    if args.len() == 1 {
+                        if let RelType::Str(path) = &args[0] {
+                            let id = crate::natives::registry::registry_file_create(path.clone());
+                            return Some(ExecResult::Value(RelType::Handle(id)));
+                        }
+                    }
+                    Some(ExecResult::Fault(
+                        "[FFI] registry_file_create expects 1 String arg".to_string(),
+                    ))
+                }
+                "registry_file_write" => {
+                    if args.len() == 2 {
+                        if let (RelType::Handle(id), RelType::Str(content)) = (&args[0], &args[1]) {
+                            crate::natives::registry::registry_file_write(*id, content.clone());
+                            return Some(ExecResult::Value(RelType::Void));
+                        }
+                    }
+                    Some(ExecResult::Fault(
+                        "[FFI] registry_file_write expects (Handle, String)".to_string(),
+                    ))
+                }
                 _ => None,
             }
         } else {
