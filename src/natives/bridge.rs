@@ -323,6 +323,47 @@ impl BridgeModule for CoreBridge {
                 }
                 _ => None,
             }
+        } else if module == "registry" {
+            match function {
+                "registry_create_counter" => {
+                    let id = crate::natives::registry::registry_create_counter();
+                    Some(ExecResult::Value(RelType::Int(id)))
+                }
+                "registry_increment" => {
+                    if args.len() == 1 {
+                        if let RelType::Int(id) = &args[0] {
+                            crate::natives::registry::registry_increment(*id);
+                            return Some(ExecResult::Value(RelType::Void));
+                        }
+                    }
+                    Some(ExecResult::Fault(
+                        "[FFI] registry_increment expects 1 Int arg".to_string(),
+                    ))
+                }
+                "registry_get_value" => {
+                    if args.len() == 1 {
+                        if let RelType::Int(id) = &args[0] {
+                            let val = crate::natives::registry::registry_get_value(*id);
+                            return Some(ExecResult::Value(RelType::Int(val)));
+                        }
+                    }
+                    Some(ExecResult::Fault(
+                        "[FFI] registry_get_value expects 1 Int arg".to_string(),
+                    ))
+                }
+                "registry_free" => {
+                    if args.len() == 1 {
+                        if let RelType::Int(id) = &args[0] {
+                            crate::natives::registry::registry_free(*id);
+                            return Some(ExecResult::Value(RelType::Void));
+                        }
+                    }
+                    Some(ExecResult::Fault(
+                        "[FFI] registry_free expects 1 Int arg".to_string(),
+                    ))
+                }
+                _ => None,
+            }
         } else {
             None
         }

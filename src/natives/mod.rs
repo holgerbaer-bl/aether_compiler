@@ -4,6 +4,7 @@ pub mod bridge;
 pub mod fs;
 pub mod io;
 pub mod math;
+pub mod registry;
 pub mod ui;
 
 pub trait NativeModule {

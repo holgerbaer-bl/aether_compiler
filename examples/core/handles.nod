@@ -1,0 +1,29 @@
+{
+  "Block": [
+    { "Import": "stdlib/registry.nod" },
+    
+    { "Print": { "StringLiteral": "======================================" } },
+    { "Print": { "StringLiteral": "  KnotenCore Handle Orchestrator" } },
+    { "Print": { "StringLiteral": "======================================" } },
+    { "Print": { "StringLiteral": "Creating native Rust counter..." } },
+    { "Assign": ["my_counter", { "Call": ["registry_create_counter", []] }] },
+    
+    { "Print": { "Concat": [{ "StringLiteral": "Acquired Handle ID: " }, { "ToString": { "Identifier": "my_counter" } }] } },
+    
+    { "Assign": ["i", { "IntLiteral": 0 }] },
+    { "While": [
+      { "Lt": [{ "Identifier": "i" }, { "IntLiteral": 5 }] },
+      { "Block": [
+        { "Call": ["registry_increment", [{ "Identifier": "my_counter" }]] },
+        { "Assign": ["i", { "Add": [{ "Identifier": "i" }, { "IntLiteral": 1 }] }] }
+      ]}
+    ]},
+    
+    { "Assign": ["final_count", { "Call": ["registry_get_value", [{ "Identifier": "my_counter" }]] }] },
+    { "Print": { "Concat": [{ "StringLiteral": "Final counter state (from Rust): " }, { "ToString": { "Identifier": "final_count" } }] } },
+    
+    { "Print": { "StringLiteral": "Freeing native memory..." } },
+    { "Call": ["registry_free", [{ "Identifier": "my_counter" }]] },
+    { "Print": { "StringLiteral": "Done." } }
+  ]
+}

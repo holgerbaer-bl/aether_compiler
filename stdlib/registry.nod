@@ -1,0 +1,32 @@
+{
+  "Block": [
+    {
+      "FnDef": [
+        "registry_create_counter",
+        [],
+        { "Block": [{ "Return": { "ExternCall": { "module": "registry", "function": "registry_create_counter", "args": [] } } }] }
+      ]
+    },
+    {
+      "FnDef": [
+        "registry_increment",
+        ["id"],
+        { "Block": [{ "Return": { "ExternCall": { "module": "registry", "function": "registry_increment", "args": [{ "Identifier": "id" }] } } }] }
+      ]
+    },
+    {
+      "FnDef": [
+        "registry_get_value",
+        ["id"],
+        { "Block": [{ "Return": { "ExternCall": { "module": "registry", "function": "registry_get_value", "args": [{ "Identifier": "id" }] } } }] }
+      ]
+    },
+    {
+      "FnDef": [
+        "registry_free",
+        ["id"],
+        { "Block": [{ "Return": { "ExternCall": { "module": "registry", "function": "registry_free", "args": [{ "Identifier": "id" }] } } }] }
+      ]
+    }
+  ]
+}
