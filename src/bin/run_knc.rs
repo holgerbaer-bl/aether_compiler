@@ -29,6 +29,7 @@ fn run() {
 
     let mut is_check = false;
     let mut no_opt = false;
+    let mut transpile = false;
     let mut file_path = String::new();
 
     for arg in args.iter().skip(1) {
@@ -36,6 +37,8 @@ fn run() {
             is_check = true;
         } else if arg == "--no-opt" {
             no_opt = true;
+        } else if arg == "--transpile" || arg == "--build" {
+            transpile = true;
         } else {
             file_path = arg.clone();
         }
@@ -88,6 +91,15 @@ fn run() {
                 std::process::exit(1);
             }
         }
+    }
+
+    if transpile {
+        let rs_code = knoten_core::compiler::codegen::generate_rust_code(&ast);
+        std::fs::write("output.rs", &rs_code).expect("Failed to write output.rs");
+        println!("\nTranspiled successfully to output.rs:");
+        println!("---------------------------------------");
+        println!("{}", rs_code);
+        return;
     }
 
     let result = engine.execute(&ast);

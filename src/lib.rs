@@ -1,4 +1,5 @@
 pub mod ast;
+pub mod compiler;
 pub mod executor;
 pub mod natives;
 pub mod optimizer;

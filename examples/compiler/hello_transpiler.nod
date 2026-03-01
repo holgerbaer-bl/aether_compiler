@@ -1,0 +1,24 @@
+{
+  "Block": [
+    {
+      "Assign": [
+        "a",
+        { "IntLiteral": 10 }
+      ]
+    },
+    {
+      "Assign": [
+        "b",
+        { "IntLiteral": 20 }
+      ]
+    },
+    {
+      "Print": {
+        "Add": [
+          { "Identifier": "a" },
+          { "Identifier": "b" }
+        ]
+      }
+    }
+  ]
+}
