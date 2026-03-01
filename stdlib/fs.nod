@@ -1,0 +1,25 @@
+{
+  "Block": [
+    {
+      "FnDef": [
+        "fs_read_file",
+        ["path"],
+        { "Block": [{ "Return": { "ExternCall": { "module": "fs", "function": "fs_read_file", "args": [{ "Identifier": "path" }] } } }] }
+      ]
+    },
+    {
+      "FnDef": [
+        "fs_parse_json",
+        ["json_str"],
+        { "Block": [{ "Return": { "ExternCall": { "module": "fs", "function": "fs_parse_json", "args": [{ "Identifier": "json_str" }] } } }] }
+      ]
+    },
+    {
+      "FnDef": [
+        "obj_has_key",
+        ["obj", "key"],
+        { "Block": [{ "Return": { "ExternCall": { "module": "fs", "function": "obj_has_key", "args": [{ "Identifier": "obj" }, { "Identifier": "key" }] } } }] }
+      ]
+    }
+  ]
+}

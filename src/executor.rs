@@ -872,7 +872,8 @@ impl ExecutionEngine {
                     if let Some(val) = obj.get(prop_name) {
                         ExecResult::Value(val.clone())
                     } else {
-                        ExecResult::Fault(format!("Property '{}' not found on Object", prop_name))
+                        // Return Void for missing keys — enables safe key-existence checks
+                        ExecResult::Value(RelType::Void)
                     }
                 }
                 ExecResult::Fault(err) => ExecResult::Fault(err),

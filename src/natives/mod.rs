@@ -1,6 +1,7 @@
 use crate::executor::{ExecResult, RelType};
 
 pub mod bridge;
+pub mod fs;
 pub mod io;
 pub mod math;
 pub mod ui;

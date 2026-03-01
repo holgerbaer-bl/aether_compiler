@@ -3,6 +3,15 @@ use std::env;
 use std::fs;
 
 fn main() {
+    // Spawn with 8MB stack to support deep recursion in KnotenCore scripts
+    let builder = std::thread::Builder::new().stack_size(8 * 1024 * 1024);
+    let handler = builder
+        .spawn(run)
+        .expect("Failed to spawn KnotenCore runtime thread");
+    handler.join().unwrap();
+}
+
+fn run() {
     let mut engine = ExecutionEngine::new();
 
     // Check if we are bundled (Sprint 11)

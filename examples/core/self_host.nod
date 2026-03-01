@@ -1,0 +1,102 @@
+{
+  "Block": [
+    { "Import": "stdlib/fs.nod" },
+
+    { "Print": { "StringLiteral": "======================================" } },
+    { "Print": { "StringLiteral": "  KnotenCore Self-Hosting Evaluator" } },
+    { "Print": { "StringLiteral": "  Phase 1: The Inception" } },
+    { "Print": { "StringLiteral": "======================================" } },
+    { "Print": { "StringLiteral": "" } },
+
+    { "Print": { "StringLiteral": "[1] Reading tiny_test.nod from disk..." } },
+    { "Assign": ["source", { "Call": ["fs_read_file", [{ "StringLiteral": "examples/core/tiny_test.nod" }]] }] },
+
+    { "Print": { "StringLiteral": "[2] Parsing JSON into KnotenCore Object..." } },
+    { "Assign": ["ast", { "Call": ["fs_parse_json", [{ "Identifier": "source" }]] }] },
+
+    { "Print": { "StringLiteral": "[3] Evaluating AST with self-hosted eval()..." } },
+    { "Print": { "StringLiteral": "" } },
+
+    {
+      "FnDef": [
+        "eval",
+        ["node"],
+        { "Block": [
+
+          { "If": [
+            { "Call": ["obj_has_key", [{ "Identifier": "node" }, { "StringLiteral": "IntLiteral" }]] },
+            { "Return": { "PropertyGet": [{ "Identifier": "node" }, "IntLiteral"] } },
+            { "Block": [] }
+          ]},
+
+          { "If": [
+            { "Call": ["obj_has_key", [{ "Identifier": "node" }, { "StringLiteral": "StringLiteral" }]] },
+            { "Return": { "PropertyGet": [{ "Identifier": "node" }, "StringLiteral"] } },
+            { "Block": [] }
+          ]},
+
+          { "If": [
+            { "Call": ["obj_has_key", [{ "Identifier": "node" }, { "StringLiteral": "FloatLiteral" }]] },
+            { "Return": { "PropertyGet": [{ "Identifier": "node" }, "FloatLiteral"] } },
+            { "Block": [] }
+          ]},
+
+          { "If": [
+            { "Call": ["obj_has_key", [{ "Identifier": "node" }, { "StringLiteral": "Add" }]] },
+            { "Block": [
+              { "Assign": ["pair", { "PropertyGet": [{ "Identifier": "node" }, "Add"] }] },
+              { "Assign": ["lv", { "Call": ["eval", [{ "Index": [{ "Identifier": "pair" }, { "IntLiteral": 0 }] }]] }] },
+              { "Assign": ["rv", { "Call": ["eval", [{ "Index": [{ "Identifier": "pair" }, { "IntLiteral": 1 }] }]] }] },
+              { "Return": { "Add": [{ "Identifier": "lv" }, { "Identifier": "rv" }] } }
+            ]},
+            { "Block": [] }
+          ]},
+
+          { "If": [
+            { "Call": ["obj_has_key", [{ "Identifier": "node" }, { "StringLiteral": "Sub" }]] },
+            { "Block": [
+              { "Assign": ["pair", { "PropertyGet": [{ "Identifier": "node" }, "Sub"] }] },
+              { "Assign": ["lv", { "Call": ["eval", [{ "Index": [{ "Identifier": "pair" }, { "IntLiteral": 0 }] }]] }] },
+              { "Assign": ["rv", { "Call": ["eval", [{ "Index": [{ "Identifier": "pair" }, { "IntLiteral": 1 }] }]] }] },
+              { "Return": { "Sub": [{ "Identifier": "lv" }, { "Identifier": "rv" }] } }
+            ]},
+            { "Block": [] }
+          ]},
+
+          { "If": [
+            { "Call": ["obj_has_key", [{ "Identifier": "node" }, { "StringLiteral": "Mul" }]] },
+            { "Block": [
+              { "Assign": ["pair", { "PropertyGet": [{ "Identifier": "node" }, "Mul"] }] },
+              { "Assign": ["lv", { "Call": ["eval", [{ "Index": [{ "Identifier": "pair" }, { "IntLiteral": 0 }] }]] }] },
+              { "Assign": ["rv", { "Call": ["eval", [{ "Index": [{ "Identifier": "pair" }, { "IntLiteral": 1 }] }]] }] },
+              { "Return": { "Mul": [{ "Identifier": "lv" }, { "Identifier": "rv" }] } }
+            ]},
+            { "Block": [] }
+          ]},
+
+          { "If": [
+            { "Call": ["obj_has_key", [{ "Identifier": "node" }, { "StringLiteral": "Print" }]] },
+            { "Block": [
+              { "Assign": ["inner", { "PropertyGet": [{ "Identifier": "node" }, "Print"] }] },
+              { "Assign": ["val", { "Call": ["eval", [{ "Identifier": "inner" }]] }] },
+              { "Print": { "Concat": [{ "StringLiteral": "    [self-host] >> " }, { "ToString": { "Identifier": "val" } }] } },
+              { "Return": { "Identifier": "val" } }
+            ]},
+            { "Block": [] }
+          ]},
+
+          { "Print": { "StringLiteral": "    [self-host] Unknown node type" } },
+          { "Return": { "IntLiteral": 0 } }
+        ]}
+      ]
+    },
+
+    { "Assign": ["result", { "Call": ["eval", [{ "Identifier": "ast" }]] }] },
+
+    { "Print": { "StringLiteral": "" } },
+    { "Print": { "StringLiteral": "======================================" } },
+    { "Print": { "Concat": [{ "StringLiteral": "  Evaluation complete. Result: " }, { "ToString": { "Identifier": "result" } }] } },
+    { "Print": { "StringLiteral": "  The Inception is real." } },
+    { "Print": { "StringLiteral": "======================================" } }
+  ]
+}

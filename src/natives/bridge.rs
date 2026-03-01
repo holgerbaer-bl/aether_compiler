@@ -239,6 +239,42 @@ impl BridgeModule for CoreBridge {
                 }
                 _ => None,
             }
+        } else if module == "fs" {
+            match function {
+                "fs_read_file" => {
+                    if args.len() == 1 {
+                        if let RelType::Str(path) = &args[0] {
+                            let content = crate::natives::fs::fs_read_file(path.clone());
+                            return Some(ExecResult::Value(RelType::Str(content)));
+                        }
+                    }
+                    Some(ExecResult::Fault(
+                        "[FFI] fs_read_file expects 1 String arg (path)".to_string(),
+                    ))
+                }
+                "fs_parse_json" => {
+                    if args.len() == 1 {
+                        if let RelType::Str(json_str) = &args[0] {
+                            let result = crate::natives::fs::fs_parse_json(json_str);
+                            return Some(ExecResult::Value(result));
+                        }
+                    }
+                    Some(ExecResult::Fault(
+                        "[FFI] fs_parse_json expects 1 String arg (json)".to_string(),
+                    ))
+                }
+                "obj_has_key" => {
+                    if args.len() == 2 {
+                        if let (RelType::Object(map), RelType::Str(key)) = (&args[0], &args[1]) {
+                            return Some(ExecResult::Value(RelType::Bool(map.contains_key(key))));
+                        }
+                    }
+                    Some(ExecResult::Fault(
+                        "[FFI] obj_has_key expects (Object, String)".to_string(),
+                    ))
+                }
+                _ => None,
+            }
         } else {
             None
         }
