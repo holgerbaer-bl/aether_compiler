@@ -3,7 +3,7 @@
 KnotenCore is a Rust-based AOT compiler and JIT runtime for JSON-encoded Abstract Syntax Trees, featuring a deterministic ARC resource registry.
 
 [![Rust](https://img.shields.io/badge/Language-Rust-orange)](https://www.rust-lang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
 ---
 
