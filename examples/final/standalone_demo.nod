@@ -1,0 +1,32 @@
+{
+  "Block": [
+    { "Print": { "StringLiteral": "=== KnotenCore Standalone Demo ===" } },
+    {
+      "Block": [
+        { "Assign": ["timer", { "NativeCall": ["registry_now", []] }] },
+        { "Assign": ["file_handle", { "NativeCall": ["registry_file_create", [{ "StringLiteral": "knoten_demo_output.txt" }]] }] },
+        { "NativeCall": ["registry_file_write", [{ "Identifier": "file_handle" }, { "StringLiteral": "KnotenCore standalone binary wrote this file!\n" }]] },
+        { "Print": { "StringLiteral": "File written: knoten_demo_output.txt" } },
+        { "Assign": ["i", { "IntLiteral": 0 }] },
+        { "Assign": ["sum", { "IntLiteral": 0 }] },
+        {
+          "While": [
+            { "Lt": [{ "Identifier": "i" }, { "IntLiteral": 100000 }] },
+            {
+              "Block": [
+                { "Assign": ["sum", { "Add": [{ "Identifier": "sum" }, { "Identifier": "i" }] }] },
+                { "Assign": ["i", { "Add": [{ "Identifier": "i" }, { "IntLiteral": 1 }] }] }
+              ]
+            }
+          ]
+        },
+        { "Assign": ["elapsed", { "NativeCall": ["registry_elapsed_ms", [{ "Identifier": "timer" }]] }] },
+        { "Print": { "StringLiteral": "CPU Sum (0..100000):" } },
+        { "Print": { "Identifier": "sum" } },
+        { "Print": { "StringLiteral": "Elapsed (ms):" } },
+        { "Print": { "Identifier": "elapsed" } }
+      ]
+    },
+    { "Print": { "StringLiteral": "ARC cleanup complete. Goodbye." } }
+  ]
+}
