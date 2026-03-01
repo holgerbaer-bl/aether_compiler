@@ -2,13 +2,13 @@ use crate::ast::Node;
 use std::collections::HashSet;
 
 pub struct Codegen {
-    pub declared_vars: HashSet<String>,
+    pub scopes: Vec<HashSet<String>>,
 }
 
 impl Codegen {
     pub fn new() -> Self {
         Self {
-            declared_vars: HashSet::new(),
+            scopes: vec![HashSet::new()],
         }
     }
 
@@ -22,10 +22,16 @@ impl Codegen {
                     out.push_str("{\n");
                 }
 
+                // Push new scope
+                self.scopes.push(HashSet::new());
+
                 for n in nodes {
                     let line = self.generate(n, false);
                     out.push_str(&format!("    {};\n", line));
                 }
+
+                // Pop scope
+                self.scopes.pop();
 
                 if is_root {
                     out.push_str("}\n");
@@ -40,12 +46,18 @@ impl Codegen {
             }
             Node::Assign(name, expr) => {
                 let inner = self.generate(expr, false);
-                if self.declared_vars.insert(name.clone()) {
-                    // Variable was not in HashSet, this is its first declaration in this scope tracking
-                    format!("let mut {} = {}", name, inner)
-                } else {
-                    // Variable already exists
+
+                let already_exists = self.scopes.iter().any(|s| s.contains(name));
+
+                if already_exists {
+                    // Variable already exists in an outer or current scope
                     format!("{} = {}", name, inner)
+                } else {
+                    // Variable was not in any HashSet, declare it in current scope
+                    if let Some(current_scope) = self.scopes.last_mut() {
+                        current_scope.insert(name.clone());
+                    }
+                    format!("let mut {} = {}", name, inner)
                 }
             }
             Node::IntLiteral(v) => format!("{}", v),
@@ -73,8 +85,44 @@ impl Codegen {
                 self.generate(l, false),
                 self.generate(r, false)
             ),
-            // Sprint 38 MVP support boundary
-            _ => format!("/* Unsupported node in Sprint 38 codegen: {:?} */", node),
+            Node::Eq(l, r) => format!(
+                "({} == {})",
+                self.generate(l, false),
+                self.generate(r, false)
+            ),
+            Node::Lt(l, r) => format!(
+                "({} < {})",
+                self.generate(l, false),
+                self.generate(r, false)
+            ),
+            Node::Gt(l, r) => format!(
+                "({} > {})",
+                self.generate(l, false),
+                self.generate(r, false)
+            ),
+            Node::If(cond, then_b, else_b) => {
+                let cond_str = self.generate(cond, false);
+                let then_str = self.generate(then_b, false);
+                if let Some(e) = else_b {
+                    format!(
+                        "if {} {} else {}",
+                        cond_str,
+                        then_str,
+                        self.generate(e, false)
+                    )
+                } else {
+                    format!("if {} {}", cond_str, then_str)
+                }
+            }
+            Node::While(cond, body) => {
+                format!(
+                    "while {} {}",
+                    self.generate(cond, false),
+                    self.generate(body, false)
+                )
+            }
+            // Sprint 38/39 MVP support boundary
+            _ => format!("/* Unsupported node in Sprint 39 codegen: {:?} */", node),
         }
     }
 }

@@ -23,6 +23,7 @@ pub enum Node {
     Time,
     Eq(Box<Node>, Box<Node>),
     Lt(Box<Node>, Box<Node>),
+    Gt(Box<Node>, Box<Node>),
 
     // Arrays, Strings & Objects
     ArrayLiteral(Vec<Node>),

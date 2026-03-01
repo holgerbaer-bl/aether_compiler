@@ -873,6 +873,31 @@ impl ExecutionEngine {
                     _ => ExecResult::Fault("Invalid Lt semantics".to_string()),
                 }
             }
+            Node::Gt(l, r) => {
+                let lv = self.evaluate(l);
+                let rv = self.evaluate(r);
+                match (lv, rv) {
+                    (ExecResult::Value(RelType::Int(li)), ExecResult::Value(RelType::Int(ri))) => {
+                        ExecResult::Value(RelType::Bool(li > ri))
+                    }
+                    (
+                        ExecResult::Value(RelType::Float(lf)),
+                        ExecResult::Value(RelType::Float(rf)),
+                    ) => ExecResult::Value(RelType::Bool(lf > rf)),
+                    (
+                        ExecResult::Value(RelType::Int(li)),
+                        ExecResult::Value(RelType::Float(rf)),
+                    ) => ExecResult::Value(RelType::Bool((li as f64) > rf)),
+                    (
+                        ExecResult::Value(RelType::Float(lf)),
+                        ExecResult::Value(RelType::Int(ri)),
+                    ) => ExecResult::Value(RelType::Bool(lf > (ri as f64))),
+                    (ExecResult::Fault(err), _) | (_, ExecResult::Fault(err)) => {
+                        ExecResult::Fault(err)
+                    }
+                    _ => ExecResult::Fault("Invalid Gt semantics".to_string()),
+                }
+            }
 
             // Objects
             Node::ObjectLiteral(map) => {

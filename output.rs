@@ -1,5 +1,8 @@
 fn main() {
-    let mut a = 10;
-    let mut b = 20;
-    println!("{}", (a + b));
+    let mut counter = 5;
+    while (counter > 0) {
+    println!("{}", counter);
+    counter = (counter - 1);
+};
+    println!("{}", String::from("Liftoff!"));
 }

@@ -49,6 +49,7 @@ impl Validator {
             | Node::Mat4Mul(l, r)
             | Node::Eq(l, r)
             | Node::Lt(l, r)
+            | Node::Gt(l, r)
             | Node::Concat(l, r)
             | Node::BitAnd(l, r)
             | Node::BitShiftLeft(l, r)

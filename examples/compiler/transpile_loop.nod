@@ -1,0 +1,14 @@
+{
+  "Block": [
+    { "Assign": ["counter", { "IntLiteral": 5 }] },
+    { "While": [
+        { "Gt": [{ "Identifier": "counter" }, { "IntLiteral": 0 }] },
+        { "Block": [
+          { "Print": { "Identifier": "counter" } },
+          { "Assign": ["counter", { "Sub": [{ "Identifier": "counter" }, { "IntLiteral": 1 }] }] }
+        ]}
+      ]
+    },
+    { "Print": { "StringLiteral": "Liftoff!" } }
+  ]
+}

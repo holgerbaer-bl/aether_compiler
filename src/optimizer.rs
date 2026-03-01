@@ -22,6 +22,7 @@ pub fn count_nodes(node: &Node) -> usize {
         | Node::Div(l, r)
         | Node::Eq(l, r)
         | Node::Lt(l, r)
+        | Node::Gt(l, r)
         | Node::BitAnd(l, r)
         | Node::BitShiftLeft(l, r)
         | Node::BitShiftRight(l, r)
@@ -139,6 +140,7 @@ pub fn optimize(node: Node) -> Node {
         // Logic Folding
         Node::Eq(l, r) => optimize_eq(*l, *r),
         Node::Lt(l, r) => optimize_lt(*l, *r),
+        Node::Gt(l, r) => optimize_gt(*l, *r),
 
         // Bitwise Folding
         Node::BitAnd(l, r) => optimize_bitwise(*l, *r, '&'),
@@ -361,6 +363,16 @@ fn optimize_lt(left: Node, right: Node) -> Node {
     }
 }
 
+fn optimize_gt(left: Node, right: Node) -> Node {
+    let opt_l = optimize(left);
+    let opt_r = optimize(right);
+    match (&opt_l, &opt_r) {
+        (Node::IntLiteral(l), Node::IntLiteral(r)) => Node::BoolLiteral(l > r),
+        (Node::FloatLiteral(l), Node::FloatLiteral(r)) => Node::BoolLiteral(l > r),
+        _ => Node::Gt(Box::new(opt_l), Box::new(opt_r)),
+    }
+}
+
 fn optimize_bitwise(left: Node, right: Node, op: char) -> Node {
     let opt_l = optimize(left);
     let opt_r = optimize(right);
@@ -473,7 +485,7 @@ impl TypeChecker {
                 }
                 Ok(lt) // Assume left type dominant for now
             }
-            Node::Eq(l, r) | Node::Lt(l, r) => {
+            Node::Eq(l, r) | Node::Lt(l, r) | Node::Gt(l, r) => {
                 let _lt = self.check(l)?;
                 let _rt = self.check(r)?;
                 Ok(Type::Bool)
