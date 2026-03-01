@@ -464,6 +464,27 @@ impl BridgeModule for CoreBridge {
                         "[FFI] registry_elapsed_ms expects 1 Handle arg".to_string(),
                     ))
                 }
+                "registry_gpu_init" => {
+                    let id = crate::natives::registry::registry_gpu_init();
+                    Some(ExecResult::Value(RelType::Handle(id)))
+                }
+                "registry_fill_color" => {
+                    if args.len() == 4 {
+                        if let (
+                            RelType::Handle(win),
+                            RelType::Int(r),
+                            RelType::Int(g),
+                            RelType::Int(b),
+                        ) = (&args[0], &args[1], &args[2], &args[3])
+                        {
+                            crate::natives::registry::registry_fill_color(*win, *r, *g, *b);
+                            return Some(ExecResult::Value(RelType::Void));
+                        }
+                    }
+                    Some(ExecResult::Fault(
+                        "[FFI] registry_fill_color expects (Handle, Int, Int, Int)".to_string(),
+                    ))
+                }
                 _ => None,
             }
         } else {

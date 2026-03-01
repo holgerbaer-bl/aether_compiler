@@ -63,6 +63,7 @@ impl Codegen {
                         || fn_name == "registry_create_window"
                         || fn_name == "registry_file_create"
                         || fn_name == "registry_now"
+                        || fn_name == "registry_gpu_init"
                     {
                         is_handle = true;
                     }

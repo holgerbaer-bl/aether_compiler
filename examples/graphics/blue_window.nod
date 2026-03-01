@@ -1,0 +1,66 @@
+{
+  "Block": [
+    { "Print": { "StringLiteral": "=== KnotenCore Visual Cortex ===" } },
+    {
+      "Block": [
+        {
+          "Assign": [
+            "win",
+            {
+              "NativeCall": [
+                "registry_create_window",
+                [
+                  { "IntLiteral": 800 },
+                  { "IntLiteral": 600 },
+                  { "StringLiteral": "KnotenCore - Blue Window" }
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "Assign": [
+            "gpu",
+            { "NativeCall": ["registry_gpu_init", []] }
+          ]
+        },
+        { "Print": { "StringLiteral": "GPU initialized. Starting render loop..." } },
+        { "Assign": ["frame", { "IntLiteral": 0 }] },
+        {
+          "While": [
+            { "Lt": [{ "Identifier": "frame" }, { "IntLiteral": 180 }] },
+            {
+              "Block": [
+                {
+                  "NativeCall": [
+                    "registry_fill_color",
+                    [
+                      { "Identifier": "win" },
+                      { "IntLiteral": 0 },
+                      { "IntLiteral": 80 },
+                      { "IntLiteral": 220 }
+                    ]
+                  ]
+                },
+                {
+                  "NativeCall": [
+                    "registry_window_update",
+                    [{ "Identifier": "win" }]
+                  ]
+                },
+                {
+                  "Assign": [
+                    "frame",
+                    { "Add": [{ "Identifier": "frame" }, { "IntLiteral": 1 }] }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        { "Print": { "StringLiteral": "180 frames rendered. Closing..." } }
+      ]
+    },
+    { "Print": { "StringLiteral": "GPU & Window handles released by ARC. Done." } }
+  ]
+}

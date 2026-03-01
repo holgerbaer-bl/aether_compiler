@@ -22,6 +22,7 @@ pub enum NativeHandle {
     Window(SendWindow),
     File(File),
     Timestamp(std::time::Instant),
+    GpuContext(GpuContext),
 }
 
 pub struct RegistryEntry {
@@ -33,6 +34,18 @@ pub struct RegistryEntry {
 pub struct StatefulCounter {
     pub count: i64,
 }
+
+// GPU Context managed by the Registry
+pub struct GpuContext {
+    pub instance: wgpu::Instance,
+    pub adapter: wgpu::Adapter,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+}
+
+// SAFETY: wgpu GPU types are Send+Sync; our registry is single-threaded.
+unsafe impl Send for GpuContext {}
+unsafe impl Sync for GpuContext {}
 
 // Global thread-safe registry
 // Instead of lazy_static we'll use a const Mutex with an Option since lazy_static might not be available
@@ -160,6 +173,7 @@ pub fn registry_dump() -> i64 {
                 NativeHandle::Window(_) => "Window",
                 NativeHandle::File(_) => "File",
                 NativeHandle::Timestamp(_) => "Timestamp",
+                NativeHandle::GpuContext(_) => "GpuContext",
             };
             println!(
                 "   -> Handle {} [Type: {}, RefCount: {}]",
@@ -312,6 +326,92 @@ pub fn registry_file_write(handle_id: i64, content: String) {
             }
         } else {
             eprintln!("[KnotenCore FileIO] Handle {} not found.", handle_id);
+        }
+    });
+}
+
+// ── GPU Orchestration ────────────────────────────────────────────────
+
+pub fn registry_gpu_init() -> i64 {
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::all(),
+        ..Default::default()
+    });
+
+    let adapter = match pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        compatible_surface: None,
+        force_fallback_adapter: false,
+    })) {
+        Some(a) => a,
+        None => {
+            eprintln!("[KnotenCore GPU] No suitable GPU adapter found.");
+            return -1;
+        }
+    };
+
+    let adapter_info = adapter.get_info();
+    println!(
+        "[KnotenCore GPU] Adapter: {} ({:?})",
+        adapter_info.name, adapter_info.backend
+    );
+
+    let (device, queue) = match pollster::block_on(adapter.request_device(
+        &wgpu::DeviceDescriptor {
+            label: Some("KnotenCore GPU Device"),
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::default(),
+            ..Default::default()
+        },
+        None,
+    )) {
+        Ok(dq) => dq,
+        Err(e) => {
+            eprintln!("[KnotenCore GPU] Failed to create device: {}", e);
+            return -1;
+        }
+    };
+
+    let mut id_guard = COUNTER_NEXT_ID.lock().unwrap();
+    let id = *id_guard;
+    *id_guard += 1;
+
+    with_registry(|registry| {
+        registry.insert(
+            id,
+            RegistryEntry {
+                handle: NativeHandle::GpuContext(GpuContext {
+                    instance,
+                    adapter,
+                    device,
+                    queue,
+                }),
+                ref_count: 1,
+            },
+        );
+    });
+
+    id as i64
+}
+
+pub fn registry_fill_color(window_handle: i64, r: i64, g: i64, b: i64) {
+    let id = window_handle as usize;
+    // Pack RGB into the 0x00RRGGBB format that minifb expects
+    let color: u32 = ((r.max(0).min(255) as u32) << 16)
+        | ((g.max(0).min(255) as u32) << 8)
+        | (b.max(0).min(255) as u32);
+    with_registry(|registry| {
+        if let Some(entry) = registry.get_mut(&id) {
+            if let NativeHandle::Window(SendWindow(state)) = &mut entry.handle {
+                state.buffer.iter_mut().for_each(|px| *px = color);
+            } else {
+                eprintln!("[KnotenCore GPU] Handle {} is not a Window.", window_handle);
+            }
+        } else {
+            eprintln!(
+                "[KnotenCore GPU] Window handle {} not found.",
+                window_handle
+            );
         }
     });
 }
