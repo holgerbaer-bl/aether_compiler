@@ -1,0 +1,75 @@
+{
+  "Block": [
+    { "Print": { "StringLiteral": "Creating Window Handle..." } },
+    {
+      "Assign": [
+        "win",
+        {
+          "NativeCall": [
+            "registry_create_window",
+            [
+              { "IntLiteral": 200 },
+              { "IntLiteral": 200 },
+              { "StringLiteral": "ARC Drop Test" }
+            ]
+          ]
+        }
+      ]
+    },
+    { "Print": { "StringLiteral": "Putting Handle in Array..." } },
+    {
+      "Assign": [
+        "arr",
+        {
+          "ArrayCreate": [
+            { "Identifier": "win" }
+          ]
+        }
+      ]
+    },
+    { "Print": { "StringLiteral": "Pushing another Handle into Array..." } },
+    {
+      "Assign": [
+        "win2",
+        {
+          "NativeCall": [
+            "registry_create_window",
+            [
+              { "IntLiteral": 200 },
+              { "IntLiteral": 200 },
+              { "StringLiteral": "ARC Drop Test 2" }
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "ArrayPush": [
+        { "Identifier": "arr" },
+        { "Identifier": "win2" }
+      ]
+    },
+    { "Print": { "StringLiteral": "Setting index 0 to a File Handle..." } },
+    {
+      "Assign": [
+        "file",
+        {
+          "NativeCall": [
+            "registry_file_create",
+            [
+              { "StringLiteral": "arc_test.log" }
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "ArraySet": [
+        { "Identifier": "arr" },
+        { "IntLiteral": 0 },
+        { "Identifier": "file" }
+      ]
+    },
+    { "Print": { "StringLiteral": "Done. Exiting scope." } }
+  ]
+}

@@ -635,46 +635,62 @@ impl ExecutionEngine {
         self.memory.get(name).cloned()
     }
 
+    pub fn release_handles(&self, val: &RelType) {
+        match val {
+            RelType::Handle(id) => {
+                crate::natives::registry::registry_release(*id);
+            }
+            RelType::Array(arr) => {
+                for item in arr {
+                    self.release_handles(item);
+                }
+            }
+            RelType::Object(map) => {
+                for item in map.values() {
+                    self.release_handles(item);
+                }
+            }
+            _ => {}
+        }
+    }
+
     pub fn set_var(&mut self, name: String, val: RelType) {
+        let mut old_val = None;
         // Mutate in existing outer scope if it exists so while-loops don't shadow iterators natively
         for frame in self.call_stack.iter_mut().rev() {
             if frame.locals.contains_key(&name) {
-                if let Some(RelType::Handle(id)) = frame.locals.get(&name) {
-                    if let RelType::Handle(new_id) = &val {
-                        if id != new_id {
-                            crate::natives::registry::registry_release(*id);
-                        }
-                    } else {
-                        crate::natives::registry::registry_release(*id);
-                    }
+                if let Some(v) = frame.locals.get(&name) {
+                    old_val = Some(v.clone());
                 }
                 frame.locals.insert(name, val);
+                if let Some(old) = old_val {
+                    self.release_handles(&old);
+                }
                 return;
             }
         }
 
         if let Some(frame) = self.call_stack.last_mut() {
-            if let Some(RelType::Handle(id)) = frame.locals.get(&name) {
-                if let RelType::Handle(new_id) = &val {
-                    if id != new_id {
-                        crate::natives::registry::registry_release(*id);
-                    }
-                } else {
-                    crate::natives::registry::registry_release(*id);
-                }
+            if let Some(v) = frame.locals.get(&name) {
+                old_val = Some(v.clone());
             }
             frame.locals.insert(name, val);
         } else {
+            if let Some(v) = self.memory.get(&name) {
+                old_val = Some(v.clone());
+            }
             self.memory.insert(name, val);
+        }
+
+        if let Some(old) = old_val {
+            self.release_handles(&old);
         }
     }
 
     pub fn pop_scope_and_release_handles(&mut self) {
         if let Some(frame) = self.call_stack.pop() {
             for (_, val) in frame.locals {
-                if let RelType::Handle(id) = val {
-                    crate::natives::registry::registry_release(id);
-                }
+                self.release_handles(&val);
             }
         }
     }
@@ -976,7 +992,7 @@ impl ExecutionEngine {
             }
 
             // Arrays & Strings
-            Node::ArrayLiteral(nodes) => {
+            Node::ArrayCreate(nodes) => {
                 let mut vals = Vec::new();
                 for item in nodes {
                     match self.evaluate(item) {
@@ -986,26 +1002,15 @@ impl ExecutionEngine {
                 }
                 ExecResult::Value(RelType::Array(vals))
             }
-            Node::ArrayGet(var_name, index_node) => {
-                let val = match self.get_var(var_name) {
-                    Some(v) => v,
-                    None => {
-                        return ExecResult::Fault(format!(
-                            "Undefined array variable '{}'",
-                            var_name
-                        ));
-                    }
-                };
-                if let RelType::Array(arr) = val {
+            Node::ArrayGet(arr_node, index_node) => {
+                let arr_val = self.evaluate(arr_node);
+                if let ExecResult::Value(RelType::Array(arr)) = arr_val {
                     match self.evaluate(index_node) {
                         ExecResult::Value(RelType::Int(idx)) => {
                             if idx >= 0 && (idx as usize) < arr.len() {
                                 ExecResult::Value(arr[idx as usize].clone())
                             } else {
-                                ExecResult::Fault(format!(
-                                    "Array index {} out of bounds for '{}'",
-                                    idx, var_name
-                                ))
+                                ExecResult::Fault(format!("Array index {} out of bounds", idx))
                             }
                         }
                         ExecResult::Value(_) => {
@@ -1013,12 +1018,19 @@ impl ExecutionEngine {
                         }
                         fault => fault,
                     }
+                } else if let ExecResult::Fault(err) = arr_val {
+                    ExecResult::Fault(err)
                 } else {
-                    ExecResult::Fault(format!("Variable '{}' is not an array", var_name))
+                    ExecResult::Fault("Target is not an array".to_string())
                 }
             }
-            Node::ArraySet(var_name, index_node, val_node) => {
-                let val = match self.get_var(var_name) {
+            Node::ArraySet(arr_node, index_node, val_node) => {
+                let var_name = if let Node::Identifier(name) = &**arr_node {
+                    name.clone()
+                } else {
+                    return ExecResult::Fault("ArraySet target must be an identifier".to_string());
+                };
+                let val = match self.get_var(&var_name) {
                     Some(v) => v,
                     None => {
                         return ExecResult::Fault(format!(
@@ -1033,31 +1045,49 @@ impl ExecutionEngine {
                     match (idx_res, val_res) {
                         (ExecResult::Value(RelType::Int(idx)), ExecResult::Value(new_val)) => {
                             if idx >= 0 && (idx as usize) < arr.len() {
+                                self.release_handles(&arr[idx as usize]);
                                 arr[idx as usize] = new_val;
-                                self.set_var(var_name.clone(), RelType::Array(arr));
+                                // We don't use set_var here to avoid re-releasing the entire array,
+                                // because we already released the specific element.
+                                // Wait, set_var will release the OLD array which includes other handles.
+                                // To mutate without deep double free, we manually modify scope.
+                                let array_val = RelType::Array(arr);
+                                let mut found = false;
+                                for frame in self.call_stack.iter_mut().rev() {
+                                    if frame.locals.contains_key(&var_name) {
+                                        // Steal the old value and do nothing with it to prevent double-free
+                                        frame.locals.insert(var_name.clone(), array_val.clone());
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                                if !found {
+                                    self.memory.insert(var_name.clone(), array_val);
+                                }
                                 ExecResult::Value(RelType::Void)
                             } else {
-                                ExecResult::Fault(format!(
-                                    "Array index {} out of bounds for '{}'",
-                                    idx, var_name
-                                ))
+                                ExecResult::Fault(format!("Array index {} out of bounds", idx))
                             }
                         }
-                        (ExecResult::Value(_), ExecResult::Value(_)) => {
+                        (ExecResult::Value(_), _) => {
                             ExecResult::Fault("Array index must be an Integer".to_string())
                         }
                         (ExecResult::Fault(err), _) | (_, ExecResult::Fault(err)) => {
                             ExecResult::Fault(err)
                         }
-                        (ExecResult::ReturnBlockInfo(v), _)
-                        | (_, ExecResult::ReturnBlockInfo(v)) => ExecResult::ReturnBlockInfo(v),
+                        _ => ExecResult::Fault("Invalid types for ArraySet".to_string()),
                     }
                 } else {
                     ExecResult::Fault(format!("Variable '{}' is not an array", var_name))
                 }
             }
-            Node::ArrayPush(var_name, val_node) => {
-                let val = match self.get_var(var_name) {
+            Node::ArrayPush(arr_node, val_node) => {
+                let var_name = if let Node::Identifier(name) = &**arr_node {
+                    name.clone()
+                } else {
+                    return ExecResult::Fault("ArrayPush target must be an identifier".to_string());
+                };
+                let val = match self.get_var(&var_name) {
                     Some(v) => v,
                     None => {
                         return ExecResult::Fault(format!(
@@ -1070,7 +1100,19 @@ impl ExecutionEngine {
                     match self.evaluate(val_node) {
                         ExecResult::Value(new_val) => {
                             arr.push(new_val);
-                            self.set_var(var_name.clone(), RelType::Array(arr));
+                            let array_val = RelType::Array(arr);
+                            let mut found = false;
+                            for frame in self.call_stack.iter_mut().rev() {
+                                if frame.locals.contains_key(&var_name) {
+                                    // Overwrite without triggering old deep-free
+                                    frame.locals.insert(var_name.clone(), array_val.clone());
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if !found {
+                                self.memory.insert(var_name.clone(), array_val);
+                            }
                             ExecResult::Value(RelType::Void)
                         }
                         fault => fault,
@@ -1079,22 +1121,16 @@ impl ExecutionEngine {
                     ExecResult::Fault(format!("Variable '{}' is not an array", var_name))
                 }
             }
-            Node::ArrayLen(var_name) => {
-                let val = match self.get_var(var_name) {
-                    Some(v) => v,
-                    None => {
-                        return ExecResult::Fault(format!(
-                            "Undefined array variable '{}'",
-                            var_name
-                        ));
-                    }
-                };
-                match val {
-                    RelType::Array(arr) => ExecResult::Value(RelType::Int(arr.len() as i64)),
-                    RelType::Str(s) => ExecResult::Value(RelType::Int(s.len() as i64)),
-                    _ => ExecResult::Fault(format!("Variable '{}' has no length", var_name)),
+            Node::ArrayLen(arr_node) => match self.evaluate(arr_node) {
+                ExecResult::Value(RelType::Array(arr)) => {
+                    ExecResult::Value(RelType::Int(arr.len() as i64))
                 }
-            }
+                ExecResult::Value(RelType::Str(s)) => {
+                    ExecResult::Value(RelType::Int(s.len() as i64))
+                }
+                ExecResult::Value(_) => ExecResult::Fault("Target has no length".to_string()),
+                fault => fault,
+            },
             Node::Index(container, index) => {
                 let cv = self.evaluate(container);
                 let iv = self.evaluate(index);

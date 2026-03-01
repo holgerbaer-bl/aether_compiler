@@ -25,7 +25,9 @@ fn main() {
                 Node::Assign("found".to_string(), Box::new(Node::BoolLiteral(false))),
                 Node::Assign(
                     "len".to_string(),
-                    Box::new(Node::ArrayLen("arr".to_string())),
+                    Box::new(Node::ArrayLen(Box::new(Node::Identifier(
+                        "arr".to_string(),
+                    )))),
                 ),
                 Node::While(
                     Box::new(Node::Lt(
@@ -36,7 +38,7 @@ fn main() {
                         Node::If(
                             Box::new(Node::Eq(
                                 Box::new(Node::ArrayGet(
-                                    "arr".to_string(),
+                                    Box::new(Node::Identifier("arr".to_string())),
                                     Box::new(Node::Identifier("i".to_string())),
                                 )),
                                 Box::new(Node::Identifier("element".to_string())),
@@ -74,7 +76,9 @@ fn main() {
             Box::new(Node::Block(vec![
                 Node::Assign(
                     "len".to_string(),
-                    Box::new(Node::ArrayLen("arr".to_string())),
+                    Box::new(Node::ArrayLen(Box::new(Node::Identifier(
+                        "arr".to_string(),
+                    )))),
                 ),
                 Node::If(
                     Box::new(Node::Eq(
@@ -87,7 +91,7 @@ fn main() {
                 Node::Assign(
                     "max_val".to_string(),
                     Box::new(Node::ArrayGet(
-                        "arr".to_string(),
+                        Box::new(Node::Identifier("arr".to_string())),
                         Box::new(Node::IntLiteral(0)),
                     )),
                 ),
@@ -101,7 +105,7 @@ fn main() {
                         Node::Assign(
                             "curr".to_string(),
                             Box::new(Node::ArrayGet(
-                                "arr".to_string(),
+                                Box::new(Node::Identifier("arr".to_string())),
                                 Box::new(Node::Identifier("i".to_string())),
                             )),
                         ),
@@ -135,9 +139,11 @@ fn main() {
             Box::new(Node::Block(vec![
                 Node::Assign(
                     "len".to_string(),
-                    Box::new(Node::ArrayLen("arr".to_string())),
+                    Box::new(Node::ArrayLen(Box::new(Node::Identifier(
+                        "arr".to_string(),
+                    )))),
                 ),
-                Node::Assign("reversed".to_string(), Box::new(Node::ArrayLiteral(vec![]))),
+                Node::Assign("reversed".to_string(), Box::new(Node::ArrayCreate(vec![]))),
                 Node::Assign("i".to_string(), Box::new(Node::IntLiteral(0))),
                 Node::While(
                     Box::new(Node::Lt(
@@ -157,9 +163,9 @@ fn main() {
                             )),
                         ),
                         Node::ArrayPush(
-                            "reversed".to_string(),
+                            Box::new(Node::Identifier("reversed".to_string())),
                             Box::new(Node::ArrayGet(
-                                "arr".to_string(),
+                                Box::new(Node::Identifier("arr".to_string())),
                                 Box::new(Node::Identifier("idx".to_string())),
                             )),
                         ),
@@ -246,7 +252,9 @@ fn main() {
             Box::new(Node::Block(vec![
                 Node::Assign(
                     "len".to_string(),
-                    Box::new(Node::ArrayLen("str".to_string())),
+                    Box::new(Node::ArrayLen(Box::new(Node::Identifier(
+                        "str".to_string(),
+                    )))),
                 ),
                 Node::If(
                     Box::new(Node::Lt(
@@ -299,7 +307,7 @@ fn main() {
         // Array.Max test
         Node::Assign(
             "arr".to_string(),
-            Box::new(Node::ArrayLiteral(vec![
+            Box::new(Node::ArrayCreate(vec![
                 Node::IntLiteral(10),
                 Node::IntLiteral(42),
                 Node::IntLiteral(5),

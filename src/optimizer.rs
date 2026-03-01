@@ -13,7 +13,6 @@ pub fn count_nodes(node: &Node) -> usize {
         | Node::InitVoxelMap
         | Node::InitAudio
         | Node::GetLastKeypress
-        | Node::ArrayLen(_)
         | Node::Import(_) => {}
 
         Node::Add(l, r)
@@ -29,7 +28,8 @@ pub fn count_nodes(node: &Node) -> usize {
         | Node::Index(l, r)
         | Node::Concat(l, r)
         | Node::Mat4Mul(l, r)
-        | Node::ArraySet(_, l, r)
+        | Node::ArrayPush(l, r)
+        | Node::ArrayGet(l, r)
         | Node::FileWrite(l, r)
         | Node::UIWindow(l, r)
         | Node::LoadTextureAtlas(l, r)
@@ -38,8 +38,7 @@ pub fn count_nodes(node: &Node) -> usize {
         }
 
         Node::Assign(_, val)
-        | Node::ArrayGet(_, val)
-        | Node::ArrayPush(_, val)
+        | Node::ArrayLen(val)
         | Node::FileRead(val)
         | Node::Print(val)
         | Node::EvalJSONNative(val)
@@ -76,7 +75,7 @@ pub fn count_nodes(node: &Node) -> usize {
             count += count_nodes(cond) + count_nodes(body);
         }
         Node::Block(nodes)
-        | Node::ArrayLiteral(nodes)
+        | Node::ArrayCreate(nodes)
         | Node::Call(_, nodes)
         | Node::NativeCall(_, nodes) => {
             for n in nodes {
@@ -108,6 +107,9 @@ pub fn count_nodes(node: &Node) -> usize {
         }
         Node::RenderAsset(a, b, c, d) | Node::SetVoxel(a, b, c, d) => {
             count += count_nodes(a) + count_nodes(b) + count_nodes(c) + count_nodes(d);
+        }
+        Node::ArraySet(a, b, c) => {
+            count += count_nodes(a) + count_nodes(b) + count_nodes(c);
         }
         Node::DrawText(a, b, c, d, e) => {
             count +=
@@ -195,16 +197,22 @@ pub fn optimize(node: Node) -> Node {
         },
 
         Node::Assign(name, val) => Node::Assign(name, Box::new(optimize(*val))),
-        Node::ArrayLiteral(elements) => {
-            Node::ArrayLiteral(elements.into_iter().map(optimize).collect())
+        Node::ArrayCreate(nodes) => Node::ArrayCreate(nodes.into_iter().map(optimize).collect()),
+        Node::ArrayGet(arr, index) => {
+            Node::ArrayGet(Box::new(optimize(*arr)), Box::new(optimize(*index)))
         }
-        Node::ArrayGet(name, idx) => Node::ArrayGet(name, Box::new(optimize(*idx))),
-        Node::ArraySet(name, idx, val) => {
-            Node::ArraySet(name, Box::new(optimize(*idx)), Box::new(optimize(*val)))
+        Node::ArraySet(arr, index, val) => Node::ArraySet(
+            Box::new(optimize(*arr)),
+            Box::new(optimize(*index)),
+            Box::new(optimize(*val)),
+        ),
+        Node::ArrayPush(arr, val) => {
+            Node::ArrayPush(Box::new(optimize(*arr)), Box::new(optimize(*val)))
         }
-        Node::ArrayPush(name, val) => Node::ArrayPush(name, Box::new(optimize(*val))),
-        Node::ArrayLen(name) => Node::ArrayLen(name),
-        Node::Index(arr, idx) => Node::Index(Box::new(optimize(*arr)), Box::new(optimize(*idx))),
+        Node::ArrayLen(arr) => Node::ArrayLen(Box::new(optimize(*arr))),
+        Node::Index(arr, index) => {
+            Node::Index(Box::new(optimize(*arr)), Box::new(optimize(*index)))
+        }
         Node::Concat(l, r) => Node::Concat(Box::new(optimize(*l)), Box::new(optimize(*r))),
 
         Node::ObjectLiteral(map) => {
@@ -460,7 +468,7 @@ impl TypeChecker {
             Node::BoolLiteral(_) => Ok(Type::Bool),
             Node::StringLiteral(_) => Ok(Type::String),
             Node::ObjectLiteral(_) => Ok(Type::Object),
-            Node::ArrayLiteral(_) => Ok(Type::Array),
+            Node::ArrayCreate(_) => Ok(Type::Array(vec![])),
             Node::Identifier(name) => {
                 if let Some(t) = self.get_var(name) {
                     Ok(t)

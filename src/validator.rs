@@ -73,6 +73,22 @@ impl Validator {
                 self.check_node(obj);
                 self.check_node(val);
             }
+            Node::ArrayGet(arr, idx) => {
+                self.check_node(arr);
+                self.check_node(idx);
+            }
+            Node::ArraySet(arr, idx, val) => {
+                self.check_node(arr);
+                self.check_node(idx);
+                self.check_node(val);
+            }
+            Node::ArrayPush(arr, val) => {
+                self.check_node(arr);
+                self.check_node(val);
+            }
+            Node::ArrayLen(arr) => {
+                self.check_node(arr);
+            }
             Node::Sin(n)
             | Node::Cos(n)
             | Node::FileRead(n)
@@ -130,7 +146,7 @@ impl Validator {
                     self.check_node(arg);
                 }
             }
-            Node::Block(nodes) | Node::ArrayLiteral(nodes) => {
+            Node::Block(nodes) | Node::ArrayCreate(nodes) => {
                 for n in nodes {
                     self.check_node(n);
                 }
@@ -173,21 +189,6 @@ impl Validator {
                     self.import_stack.remove(path);
                 }
             }
-            Node::ArrayGet(var, idx) | Node::ArrayPush(var, idx) => {
-                if var.is_empty() {
-                    self.errors
-                        .push("Array operation: Variable name cannot be empty".to_string());
-                }
-                self.check_node(idx);
-            }
-            Node::ArraySet(var, idx, val) => {
-                if var.is_empty() {
-                    self.errors
-                        .push("ArraySet: Variable name cannot be empty".to_string());
-                }
-                self.check_node(idx);
-                self.check_node(val);
-            }
             Node::Index(target, idx) => {
                 self.check_node(target);
                 self.check_node(idx);
@@ -224,8 +225,7 @@ impl Validator {
             | Node::InitAudio
             | Node::GetLastKeypress
             | Node::InitVoxelMap
-            | Node::StopNote(_)
-            | Node::ArrayLen(_) => {}
+            | Node::StopNote(_) => {}
         }
     }
 }

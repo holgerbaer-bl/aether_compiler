@@ -1,14 +1,47 @@
 use crate::ast::Node;
 use std::collections::HashMap;
 
+#[derive(Clone, Copy, PartialEq)]
+pub enum VarKind {
+    Normal,
+    Handle,
+    HandleArray,
+}
+
 pub struct Codegen {
-    pub scopes: Vec<HashMap<String, bool>>,
+    pub scopes: Vec<HashMap<String, VarKind>>,
 }
 
 impl Codegen {
     pub fn new() -> Self {
         Self {
             scopes: vec![HashMap::new()],
+        }
+    }
+
+    pub fn is_handle_expr(&self, n: &Node) -> bool {
+        match n {
+            Node::NativeCall(fn_name, _) => {
+                matches!(
+                    fn_name.as_str(),
+                    "registry_create_counter"
+                        | "registry_create_window"
+                        | "registry_file_create"
+                        | "registry_now"
+                        | "registry_gpu_init"
+                        | "registry_voxel_world_create"
+                )
+            }
+            Node::Identifier(name) => {
+                for scope in self.scopes.iter().rev() {
+                    if let Some(kind) = scope.get(name) {
+                        return *kind == VarKind::Handle;
+                    }
+                }
+                false
+            }
+            Node::ArrayCreate(nodes) => nodes.iter().any(|node| self.is_handle_expr(node)),
+            _ => false,
         }
     }
 
@@ -33,9 +66,11 @@ impl Codegen {
 
                 // Identify handles to drop
                 let current_scope = self.scopes.last().unwrap();
-                for (var_name, is_handle) in current_scope {
-                    if *is_handle {
+                for (var_name, kind) in current_scope {
+                    if *kind == VarKind::Handle {
                         out.push_str(&format!("    registry::registry_release({});\n", var_name));
+                    } else if *kind == VarKind::HandleArray {
+                        out.push_str(&format!("    for item in {} {{\n        registry::registry_release(item);\n    }}\n", var_name));
                     }
                 }
 
@@ -57,33 +92,34 @@ impl Codegen {
                 let inner = self.generate(expr, false);
                 let already_exists = self.scopes.iter().any(|s| s.contains_key(name));
 
-                let mut is_handle = false;
-                if let Node::NativeCall(fn_name, _) = &**expr {
-                    if fn_name == "registry_create_counter"
-                        || fn_name == "registry_create_window"
-                        || fn_name == "registry_file_create"
-                        || fn_name == "registry_now"
-                        || fn_name == "registry_gpu_init"
-                        || fn_name == "registry_voxel_world_create"
-                    {
-                        is_handle = true;
+                let mut kind = VarKind::Normal;
+                if self.is_handle_expr(&**expr) {
+                    if let Node::ArrayCreate(_) = &**expr {
+                        kind = VarKind::HandleArray;
+                    } else {
+                        kind = VarKind::Handle;
                     }
                 }
 
                 if already_exists {
-                    let mut previously_was_handle = false;
+                    let mut previously_was = VarKind::Normal;
                     for scope in self.scopes.iter_mut().rev() {
-                        if let Some(was_handle) = scope.get(name) {
-                            previously_was_handle = *was_handle;
-                            scope.insert(name.clone(), is_handle);
+                        if let Some(was_kind) = scope.get(name) {
+                            previously_was = *was_kind;
+                            scope.insert(name.clone(), kind);
                             break;
                         }
                     }
 
-                    if previously_was_handle {
+                    if previously_was == VarKind::Handle {
                         // Drop former handle before reassignment
                         format!(
                             "registry::registry_release({});\n    {} = {}",
+                            name, name, inner
+                        )
+                    } else if previously_was == VarKind::HandleArray {
+                        format!(
+                            "for item in {} {{\n        registry::registry_release(item);\n    }}\n    {} = {}",
                             name, name, inner
                         )
                     } else {
@@ -91,7 +127,7 @@ impl Codegen {
                     }
                 } else {
                     if let Some(current_scope) = self.scopes.last_mut() {
-                        current_scope.insert(name.clone(), is_handle);
+                        current_scope.insert(name.clone(), kind);
                     }
                     format!("let mut {} = {}", name, inner)
                 }
@@ -136,6 +172,51 @@ impl Codegen {
                 self.generate(l, false),
                 self.generate(r, false)
             ),
+            Node::ArrayCreate(nodes) => {
+                let mut elem_strs = Vec::new();
+                for n in nodes {
+                    elem_strs.push(self.generate(n, false));
+                }
+                format!("vec![{}]", elem_strs.join(", "))
+            }
+            Node::ArrayGet(arr, index) => {
+                format!(
+                    "{}[{} as usize]",
+                    self.generate(arr, false),
+                    self.generate(index, false)
+                )
+            }
+            Node::ArraySet(arr, index, val) => {
+                // If the array holds handles and we overwrite an element, we should ideally release the old element.
+                // However, without a statically verified HandleArray type for the expression,
+                // we'll ignore single-element deep drop in AOT for now, leaning on the full array drop at end of scope.
+                format!(
+                    "{}[{} as usize] = {}",
+                    self.generate(arr, false),
+                    self.generate(index, false),
+                    self.generate(val, false)
+                )
+            }
+            Node::ArrayPush(arr, val) => {
+                if self.is_handle_expr(&**val) {
+                    if let Node::Identifier(name) = &**arr {
+                        for scope in self.scopes.iter_mut().rev() {
+                            if scope.contains_key(name) {
+                                scope.insert(name.clone(), VarKind::HandleArray);
+                                break;
+                            }
+                        }
+                    }
+                }
+                format!(
+                    "{}.push({})",
+                    self.generate(arr, false),
+                    self.generate(val, false)
+                )
+            }
+            Node::ArrayLen(arr) => {
+                format!("{}.len() as i64", self.generate(arr, false))
+            }
             Node::If(cond, then_b, else_b) => {
                 let cond_str = self.generate(cond, false);
                 let then_str = self.generate(then_b, false);

@@ -527,7 +527,7 @@ knoten_test!(
 // ------------------------------------------------------------------
 knoten_test!(
     test_51_array_literal,
-    Node::ArrayLiteral(vec![Node::IntLiteral(1), Node::IntLiteral(2)]),
+    Node::ArrayCreate(vec![Node::IntLiteral(1), Node::IntLiteral(2)]),
     "Return: [1 (i64), 2 (i64)] (Array)"
 );
 

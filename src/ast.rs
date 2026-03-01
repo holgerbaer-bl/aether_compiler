@@ -26,12 +26,12 @@ pub enum Node {
     Gt(Box<Node>, Box<Node>),
 
     // Arrays, Strings & Objects
-    ArrayLiteral(Vec<Node>),
-    ArrayGet(String, Box<Node>),            // Variable, Index
-    ArraySet(String, Box<Node>, Box<Node>), // Variable, Index, Value
-    ArrayPush(String, Box<Node>),           // Variable, Value
-    ArrayLen(String),                       // Variable
-    Index(Box<Node>, Box<Node>),            // General index (Expression based)
+    ArrayCreate(Vec<Node>),
+    ArrayGet(Box<Node>, Box<Node>),            // Target Array, Index
+    ArraySet(Box<Node>, Box<Node>, Box<Node>), // Target Array, Index, Value
+    ArrayPush(Box<Node>, Box<Node>),           // Target Array, Value
+    ArrayLen(Box<Node>),                       // Target Array
+    Index(Box<Node>, Box<Node>),               // General index (Expression based)
     Concat(Box<Node>, Box<Node>),
 
     ObjectLiteral(std::collections::HashMap<String, Node>),
@@ -115,7 +115,7 @@ pub enum Type {
     Float,
     Bool,
     String,
-    Array,
+    Array(Vec<Type>),
     Object,
     Handle,
     Any,
