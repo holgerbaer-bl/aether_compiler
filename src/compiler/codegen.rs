@@ -203,15 +203,19 @@ impl Codegen {
                 )
             }
             Node::ArraySet(arr, index, val) => {
-                // If the array holds handles and we overwrite an element, we should ideally release the old element.
-                // However, without a statically verified HandleArray type for the expression,
-                // we'll ignore single-element deep drop in AOT for now, leaning on the full array drop at end of scope.
-                format!(
-                    "{}[{} as usize] = {}",
-                    self.generate(arr, false),
-                    self.generate(index, false),
-                    self.generate(val, false)
-                )
+                let is_handle = self.is_handle_expr(&**val);
+                let arr_code = self.generate(arr, false);
+                let idx_code = self.generate(index, false);
+                let val_code = self.generate(val, false);
+
+                if is_handle {
+                    format!(
+                        "{{ registry::registry_release({}[{} as usize]); {}[{} as usize] = {}; }}",
+                        arr_code, idx_code, arr_code, idx_code, val_code
+                    )
+                } else {
+                    format!("{}[{} as usize] = {}", arr_code, idx_code, val_code)
+                }
             }
             Node::ArrayPush(arr, val) => {
                 if self.is_handle_expr(&**val) {
@@ -236,7 +240,7 @@ impl Codegen {
             Node::MapCreate => "std::collections::HashMap::new()".to_string(),
             Node::MapGet(map, key) => {
                 format!(
-                    "(*{}.get(&{}).unwrap_or(&0))",
+                    "{}.get(&{}).cloned().unwrap()",
                     self.generate(map, false),
                     self.generate(key, false)
                 )

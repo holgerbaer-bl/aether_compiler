@@ -5,7 +5,7 @@ use cgmath::InnerSpace;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum RelType {
     Int(i64),
     Float(f64),
@@ -20,6 +20,27 @@ pub enum RelType {
 
     // I/OParameters, Body Block
     Void,
+}
+
+// Manual Clone since Handles require notifying the Registry
+impl Clone for RelType {
+    fn clone(&self) -> Self {
+        match self {
+            RelType::Int(v) => RelType::Int(*v),
+            RelType::Float(v) => RelType::Float(*v),
+            RelType::Bool(v) => RelType::Bool(*v),
+            RelType::Str(s) => RelType::Str(s.clone()),
+            RelType::Array(a) => RelType::Array(a.clone()),
+            RelType::Object(m) => RelType::Object(m.clone()),
+            RelType::Handle(id) => {
+                crate::natives::registry::registry_retain(*id);
+                RelType::Handle(*id)
+            }
+            RelType::FnDef(a, b, c) => RelType::FnDef(a.clone(), b.clone(), c.clone()),
+            RelType::Call(a, b) => RelType::Call(a.clone(), b.clone()),
+            RelType::Void => RelType::Void,
+        }
+    }
 }
 
 impl std::fmt::Display for RelType {
@@ -567,7 +588,6 @@ impl ExecutionEngine {
     }
 
     pub fn execute(&mut self, root: &Node) -> String {
-        self.memory.clear();
         let res = self.evaluate(root);
 
         let mut out = String::new();
@@ -577,7 +597,8 @@ impl ExecutionEngine {
             }
             ExecResult::Fault(err) => {
                 // Return exactly "Fault: ..." as tests expect it
-                return format!("Fault: {}", err);
+                // We still need to clear memory
+                out = format!("Fault: {}", err);
             }
         }
 
@@ -620,6 +641,14 @@ impl ExecutionEngine {
 
             out.push_str(&mem_str.join(", "));
         }
+
+        // Target M-1 (Part of H-1): When execution completes, clean up the global memory scope.
+        // Iterate through all stored variables and trigger their handles to release.
+        let values: Vec<RelType> = self.memory.values().cloned().collect();
+        for val in values {
+            self.release_handles(&val);
+        }
+        self.memory.clear();
 
         out
     }
@@ -981,6 +1010,12 @@ impl ExecutionEngine {
                                 ));
                             }
                         };
+
+                        // M-6: Only release the specific overwritten property, not the whole object
+                        if let Some(old_val) = current_obj.get(prop_name) {
+                            self.release_handles(old_val);
+                        }
+
                         current_obj.insert(prop_name.clone(), val.clone());
                         self.set_var(var_name.clone(), RelType::Object(current_obj));
                         ExecResult::Value(val)
@@ -1235,7 +1270,8 @@ impl ExecutionEngine {
                         }
                     }
                     (ExecResult::Value(RelType::Str(s)), ExecResult::Value(RelType::Int(idx))) => {
-                        if idx >= 0 && (idx as usize) < s.len() {
+                        let chars_count = s.chars().count();
+                        if idx >= 0 && (idx as usize) < chars_count {
                             let ch = s.chars().nth(idx as usize).unwrap();
                             ExecResult::Value(RelType::Str(ch.to_string()))
                         } else {

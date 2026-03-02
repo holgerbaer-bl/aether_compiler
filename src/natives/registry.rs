@@ -175,7 +175,7 @@ fn with_registry<F, R>(f: F) -> R
 where
     F: FnOnce(&mut HashMap<usize, RegistryEntry>) -> R,
 {
-    let mut option_guard = COUNTER_REGISTRY.lock().unwrap();
+    let mut option_guard = COUNTER_REGISTRY.lock().unwrap_or_else(|e| e.into_inner());
     if option_guard.is_none() {
         *option_guard = Some(HashMap::new());
     }
@@ -185,6 +185,9 @@ where
 // ── Lifecycle FFI Implementations ─────────────────────────────────
 
 pub fn registry_retain(handle_id: i64) {
+    if handle_id < 0 {
+        return;
+    }
     let id = handle_id as usize;
     with_registry(|registry| {
         if let Some(entry) = registry.get_mut(&id) {
@@ -194,6 +197,9 @@ pub fn registry_retain(handle_id: i64) {
 }
 
 pub fn registry_release(handle_id: i64) {
+    if handle_id < 0 {
+        return;
+    }
     let id = handle_id as usize;
     let mut remove = false;
     with_registry(|registry| {
@@ -213,7 +219,7 @@ pub fn registry_release(handle_id: i64) {
 
 // FFI Implementations
 pub fn registry_create_counter() -> i64 {
-    let mut id_guard = COUNTER_NEXT_ID.lock().unwrap();
+    let mut id_guard = COUNTER_NEXT_ID.lock().unwrap_or_else(|e| e.into_inner());
     let id = *id_guard;
     *id_guard += 1;
 
@@ -232,6 +238,9 @@ pub fn registry_create_counter() -> i64 {
 }
 
 pub fn registry_increment(handle_id: i64) {
+    if handle_id < 0 {
+        return;
+    }
     let id = handle_id as usize;
     with_registry(|registry| {
         if let Some(entry) = registry.get_mut(&id) {
@@ -250,6 +259,9 @@ pub fn registry_increment(handle_id: i64) {
 }
 
 pub fn registry_get_value(handle_id: i64) -> i64 {
+    if handle_id < 0 {
+        return 0;
+    }
     let id = handle_id as usize;
     with_registry(|registry| {
         if let Some(entry) = registry.get(&id) {
@@ -269,17 +281,11 @@ pub fn registry_get_value(handle_id: i64) -> i64 {
 }
 
 pub fn registry_free(handle_id: i64) {
-    let id = handle_id as usize;
-    with_registry(|registry| {
-        if registry.remove(&id).is_some() {
-            // Memory freed natively
-        } else {
-            eprintln!(
-                "[KnotenCore Registry] Warning: Double free or invalid handle {}.",
-                handle_id
-            );
-        }
-    });
+    if handle_id < 0 {
+        return;
+    }
+    // Finding C-2: Do not unconditionally remove the handle, respect the refcount mechanism by releasing it
+    registry_release(handle_id);
 }
 
 pub fn registry_dump() -> i64 {
@@ -316,7 +322,7 @@ pub fn registry_dump() -> i64 {
 // ── Timestamp Orchestration ────────────────────────────────────────
 
 pub fn registry_now() -> i64 {
-    let mut id_guard = COUNTER_NEXT_ID.lock().unwrap();
+    let mut id_guard = COUNTER_NEXT_ID.lock().unwrap_or_else(|e| e.into_inner());
     let id = *id_guard;
     *id_guard += 1;
 
@@ -334,6 +340,9 @@ pub fn registry_now() -> i64 {
 }
 
 pub fn registry_elapsed_ms(handle_id: i64) -> i64 {
+    if handle_id < 0 {
+        return 0;
+    }
     let id = handle_id as usize;
     with_registry(|registry| {
         if let Some(entry) = registry.get(&id) {
@@ -386,6 +395,9 @@ pub fn registry_create_window(width: i64, height: i64, title: String) -> i64 {
 }
 
 pub fn registry_window_update(handle_id: i64) -> bool {
+    if handle_id < 0 {
+        return false;
+    }
     let id = handle_id as usize;
     with_registry(|registry| {
         if let Some(entry) = registry.get_mut(&id) {
@@ -413,7 +425,7 @@ pub fn registry_window_close(handle_id: i64) {
 // ── File IO Orchestration ─────────────────────────────────────────
 
 pub fn registry_file_create(path: String) -> i64 {
-    let mut id_guard = COUNTER_NEXT_ID.lock().unwrap();
+    let mut id_guard = COUNTER_NEXT_ID.lock().unwrap_or_else(|e| e.into_inner());
     let id = *id_guard;
     *id_guard += 1;
 
@@ -438,6 +450,9 @@ pub fn registry_file_create(path: String) -> i64 {
 }
 
 pub fn registry_file_write(handle_id: i64, content: String) {
+    if handle_id < 0 {
+        return;
+    }
     let id = handle_id as usize;
     with_registry(|registry| {
         if let Some(entry) = registry.get_mut(&id) {
@@ -499,7 +514,7 @@ pub fn registry_gpu_init() -> i64 {
         }
     };
 
-    let mut id_guard = COUNTER_NEXT_ID.lock().unwrap();
+    let mut id_guard = COUNTER_NEXT_ID.lock().unwrap_or_else(|e| e.into_inner());
     let id = *id_guard;
     *id_guard += 1;
 
@@ -522,6 +537,9 @@ pub fn registry_gpu_init() -> i64 {
 }
 
 pub fn registry_fill_color(window_handle: i64, r: i64, g: i64, b: i64) {
+    if window_handle < 0 {
+        return;
+    }
     let id = window_handle as usize;
     // Pack RGB into the 0x00RRGGBB format that minifb expects
     let color: u32 = ((r.max(0).min(255) as u32) << 16)
@@ -560,7 +578,7 @@ pub fn registry_voxel_world_create(width: i64, height: i64, title: String) -> i6
     ) {
         Ok(mut win) => {
             win.set_target_fps(60);
-            let mut id_guard = COUNTER_NEXT_ID.lock().unwrap();
+            let mut id_guard = COUNTER_NEXT_ID.lock().unwrap_or_else(|e| e.into_inner());
             let id = *id_guard;
             *id_guard += 1;
             with_registry(|registry| {
@@ -588,6 +606,9 @@ pub fn registry_voxel_world_create(width: i64, height: i64, title: String) -> i6
 }
 
 pub fn registry_voxel_add_block(world_handle: i64, x: i64, y: i64, z: i64) {
+    if world_handle < 0 {
+        return;
+    }
     let id = world_handle as usize;
     with_registry(|registry| {
         if let Some(entry) = registry.get_mut(&id) {
@@ -600,6 +621,9 @@ pub fn registry_voxel_add_block(world_handle: i64, x: i64, y: i64, z: i64) {
 
 /// Renders one frame of the voxel scene. Returns true while the window is open.
 pub fn registry_voxel_render_frame(world_handle: i64) -> bool {
+    if world_handle < 0 {
+        return false;
+    }
     let id = world_handle as usize;
     with_registry(|registry| {
         if let Some(entry) = registry.get_mut(&id) {
@@ -655,7 +679,7 @@ pub fn registry_texture_load(path: String) -> i64 {
         path, width, height
     );
 
-    let mut id_guard = COUNTER_NEXT_ID.lock().unwrap();
+    let mut id_guard = COUNTER_NEXT_ID.lock().unwrap_or_else(|e| e.into_inner());
     let id = *id_guard;
     *id_guard += 1;
 
@@ -685,6 +709,9 @@ pub fn registry_draw_quad_3d(
     y: i64,
     _z: i64, // reserved for depth sorting
 ) {
+    if window_handle < 0 || texture_handle < 0 {
+        return;
+    }
     let win_id = window_handle as usize;
     let tex_id = texture_handle as usize;
 
