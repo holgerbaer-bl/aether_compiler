@@ -24,7 +24,7 @@
           "NativeCall": [
             "registry_texture_load",
             [
-              { "StringLiteral": "examples/graphics/wall.png" }
+              { "StringLiteral": "assets/wall.png" }
             ]
           ]
         }

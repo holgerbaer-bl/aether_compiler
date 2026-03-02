@@ -7,3 +7,5 @@ output.rs
 *.exe
 *.pdb
 *.bin
+Cargo.lock
+.gemini/

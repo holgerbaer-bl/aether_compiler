@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.png" alt="KnotenCore Logo" width="256"/>
+  <img src="assets/logo.png" alt="KnotenCore Logo" width="256"/>
 </p>
 
 # KnotenCore
