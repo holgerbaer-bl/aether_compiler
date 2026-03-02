@@ -1,22 +1,21 @@
 {
   "Block": [
-    { "NativeCall": ["registry_create_window", [{ "IntLiteral": 800 }, { "IntLiteral": 600 }, { "StringLiteral": "KnotenCore 3D Flex" }]] },
-    { "VarDecl": { "name": "win", "value": { "Identifier": "$0" } } },
-    { "NativeCall": ["registry_texture_load", [{ "StringLiteral": "assets/wall.png" }]] },
-    { "VarDecl": { "name": "wall_tex", "value": { "Identifier": "$0" } } },
-    { "NativeCall": ["registry_texture_load", [{ "StringLiteral": "assets/ball.png" }]] },
-    { "VarDecl": { "name": "ball_tex", "value": { "Identifier": "$0" } } },
+    { "Assign": ["win", { "NativeCall": ["registry_create_window", [{ "IntLiteral": 800 }, { "IntLiteral": 600 }, { "StringLiteral": "KnotenCore 3D Flex" }]] }] },
+    
+    { "Assign": ["wall_tex", { "NativeCall": ["registry_texture_load", [{ "StringLiteral": "assets/wall.png" }]] }] },
+    
+    { "Assign": ["ball_tex", { "NativeCall": ["registry_texture_load", [{ "StringLiteral": "assets/ball.png" }]] }] },
 
     { "NativeCall": ["registry_set_camera", [{ "FloatLiteral": 90.0 }, { "FloatLiteral": 0.0 }, { "FloatLiteral": 1.0 }, { "FloatLiteral": -5.0 }]] },
 
-    { "VarDecl": { "name": "i", "value": { "IntLiteral": 0 } } },
-    { "While": {
-      "condition": { "BinaryOp": { "op": "LessThan", "left": { "Identifier": "i" }, "right": { "IntLiteral": 300 } } },
-      "body": {
-        "Block": [
+    { "Assign": ["i", { "FloatLiteral": 0.0 }] },
+    
+    { "While": [
+      { "Lt": [{ "Identifier": "i" }, { "FloatLiteral": 300.0 }] },
+      { "Block": [
           { "NativeCall": ["registry_fill_color", [{ "Identifier": "win" }, { "IntLiteral": 20 }, { "IntLiteral": 20 }, { "IntLiteral": 30 }]] },
           
-          { "VarDecl": { "name": "ball_z", "value": { "BinaryOp": { "op": "Multiply", "left": { "Identifier": "i" }, "right": { "FloatLiteral": 0.08 } } } } },
+          { "Assign": ["ball_z", { "Mul": [{ "Identifier": "i" }, { "FloatLiteral": 0.08 }] }] },
 
           { "NativeCall": ["registry_draw_quad_3d", [{ "Identifier": "win" }, { "Identifier": "wall_tex" }, { "FloatLiteral": 0.0 }, { "FloatLiteral": -2.0 }, { "FloatLiteral": 10.0 }, { "FloatLiteral": 40.0 }, { "FloatLiteral": 20.0 }]] },
           
@@ -28,9 +27,8 @@
           
           { "NativeCall": ["registry_window_update", [{ "Identifier": "win" }]] },
           
-          { "Assign": { "target": "i", "value": { "BinaryOp": { "op": "Add", "left": { "Identifier": "i" }, "right": { "IntLiteral": 1 } } } } }
-        ]
-      }
-    } }
+          { "Assign": ["i", { "Add": [{ "Identifier": "i" }, { "FloatLiteral": 1.0 }] }] }
+      ]}
+    ]}
   ]
 }
