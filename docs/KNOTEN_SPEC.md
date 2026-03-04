@@ -147,9 +147,11 @@ Triggers an asynchronous, polyphonic audio stream natively out of the thread loo
 ### 4.12. Desktop GUIs (Egui Immediate Mode)
 *   **`UIWindow(Box<Node>, Box<Node>)`**: Takes a Title (String) and a Body (Block Node). Spawns an interactive, draggable OS-styled window within the WGPU canvas and evaluates the inner Body block to populate its contents.
 *   **`UILabel(Box<Node>)`**: Takes Text (String) and renders a formatted text label within the current UI context.
-*   **`UIButton(Box<Node>)`**: Takes Text (String). Renders a clickable button in the UI context. Returns `Int` 1 if clicked this frame, 0 otherwise.
+*   **`UIButton(Box<Node>)`**: Takes Text (String). Renders a clickable button in the UI context. Returns `Bool` `true` if clicked this frame, `false` otherwise.
 *   **`UITextInput(Box<Node>)`**: Takes a Variable Name (String). Instantiates a single-line text input field inextricably linked to that variable in the ambient memory store, reacting to keyboard polling and cursor selection automatically.
-*   **`UISetStyle(Box<Node>, Box<Node>, Box<Node>, Box<Node>)`**: Applies visual tweaks to the EGUI context globally. Configures Rounding (Float), Spacing (Float), Accent Color (Array of 4 Floats), and Window Fill (Array of 4 Floats).
+*   **`UISetStyle(Box<Node>, Box<Node>, Box<Node>, Box<Node>, Option<Box<Node>>, Option<Box<Node>>)`**: Applies visual tweaks to the EGUI context globally. Configures Rounding (Float), Spacing (Float), Accent RGBA (Array), Window Fill RGBA (Array), Button Idle RGBA (Optional Array), Button Hover RGBA (Optional Array).
+*   **`UIHorizontal(Box<Node>)`**: Evaluates a Block of child nodes inside a horizontal egui layout, placing all children side-by-side on the same row. Use to build button grids, toolbars, or inline widgets.
+*   **`UIFullscreen(Box<Node>)`**: Evaluates its body Block inside a borderless, title-bar-free Egui panel that fills the entire available canvas. Ideal for full-screen HUDs, video-game overlays, and immersive UIs.
 
 ### 4.13. Control Flow
 *   **`Import(String)`**: Imports another KnotenCore executable JSON file by path, making its top-level definitions and variable assignments available in the current global scope.

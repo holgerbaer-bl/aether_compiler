@@ -5,7 +5,7 @@ use cgmath::InnerSpace;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::collections::HashMap;
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub enum RelType {
     Int(i64),
     Float(f64),
@@ -46,24 +46,48 @@ impl Clone for RelType {
 impl std::fmt::Display for RelType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RelType::Int(v) => write!(f, "{} (i64)", v),
-            RelType::Float(v) => write!(f, "{:?} (f64)", v), // Using Debug to avoid dropping .0 on integers formatting like floats
-            RelType::Bool(v) => write!(f, "{} (bool)", v),
-            RelType::Str(v) => write!(f, "\"{}\" (String)", v),
+            RelType::Int(v) => write!(f, "{}", v),
+            RelType::Float(v) => {
+                // Format without trailing .0 noise but always show decimal for clarity
+                if v.fract() == 0.0 && v.abs() < 1e15 {
+                    write!(f, "{:.1}", v)
+                } else {
+                    write!(f, "{}", v)
+                }
+            }
+            RelType::Bool(v) => write!(f, "{}", v),
+            RelType::Str(v) => write!(f, "{}", v),
             RelType::Array(v) => {
                 let s: Vec<String> = v.iter().map(|i| i.to_string()).collect();
-                write!(f, "[{}] (Array)", s.join(", "))
+                write!(f, "[{}]", s.join(", "))
             }
             RelType::Object(map) => {
                 let mut s = Vec::new();
                 for (k, v) in map {
                     s.push(format!("{}: {}", k, v));
                 }
-                write!(f, "{{{}}} (Object)", s.join(", "))
+                write!(f, "{{{}}}", s.join(", "))
             }
             RelType::Handle(id) => write!(f, "Handle<{}>", id),
             RelType::FnDef(_, _, _) => write!(f, "<Function>"),
             RelType::Call(_, _) => write!(f, "<Function Call>"),
+            RelType::Void => write!(f, ""),
+        }
+    }
+}
+
+impl std::fmt::Debug for RelType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RelType::Int(v) => write!(f, "{} (i64)", v),
+            RelType::Float(v) => write!(f, "{:?} (f64)", v),
+            RelType::Bool(v) => write!(f, "{} (bool)", v),
+            RelType::Str(v) => write!(f, "\"{}\" (String)", v),
+            RelType::Array(v) => write!(f, "{:?} (Array)", v),
+            RelType::Object(_) => write!(f, "{{...}} (Object)"),
+            RelType::Handle(id) => write!(f, "Handle<{}>", id),
+            RelType::FnDef(name, _, _) => write!(f, "FnDef({})", name),
+            RelType::Call(name, _) => write!(f, "Call({})", name),
             RelType::Void => write!(f, "void"),
         }
     }
@@ -593,7 +617,7 @@ impl ExecutionEngine {
         let mut out = String::new();
         match res {
             ExecResult::Value(val) | ExecResult::ReturnBlockInfo(val) => {
-                out.push_str(&format!("Return: {}", val));
+                out.push_str(&format!("Return: {:?}", val));
             }
             ExecResult::Fault(err) => {
                 // Return exactly "Fault: ..." as tests expect it
@@ -886,15 +910,15 @@ impl ExecutionEngine {
                     ExecResult::Value(RelType::Str(s)) => s,
                     _ => "".to_string(),
                 };
-                let mut clicked = 0;
+                let mut clicked = false;
                 if let Some(ui_ptr) = self.egui_ui_ptr {
                     unsafe {
                         if (*ui_ptr).button(text_str).clicked() {
-                            clicked = 1;
+                            clicked = true;
                         }
                     }
                 }
-                ExecResult::Value(RelType::Int(clicked))
+                ExecResult::Value(RelType::Bool(clicked))
             }
             Node::UITextInput(var_name_node) => {
                 let var_val = self.evaluate(var_name_node);
@@ -914,7 +938,14 @@ impl ExecutionEngine {
                 }
                 ExecResult::Value(RelType::Void)
             }
-            Node::UISetStyle(rounding_node, spacing_node, accent_node, fill_node) => {
+            Node::UISetStyle(
+                rounding_node,
+                spacing_node,
+                accent_node,
+                fill_node,
+                btn_idle_node,
+                btn_hover_node,
+            ) => {
                 let rounding = match self.evaluate(rounding_node) {
                     ExecResult::Value(RelType::Float(f)) => f as f32,
                     ExecResult::Value(RelType::Int(i)) => i as f32,
@@ -925,57 +956,85 @@ impl ExecutionEngine {
                     ExecResult::Value(RelType::Int(i)) => i as f32,
                     _ => 8.0,
                 };
-                let mut accent = [0.0, 0.5, 1.0, 1.0];
-                if let ExecResult::Value(RelType::Array(arr)) = self.evaluate(accent_node) {
-                    for (i, v) in arr.iter().enumerate().take(4) {
-                        accent[i] = match v {
-                            RelType::Float(f) => *f as f32,
-                            RelType::Int(v) => *v as f32,
-                            _ => accent[i],
-                        };
+                let parse_rgba = |result: ExecResult, default: [f32; 4]| -> [f32; 4] {
+                    let mut out = default;
+                    if let ExecResult::Value(RelType::Array(arr)) = result {
+                        for (i, v) in arr.iter().enumerate().take(4) {
+                            out[i] = match v {
+                                RelType::Float(f) => *f as f32,
+                                RelType::Int(v) => *v as f32,
+                                _ => out[i],
+                            };
+                        }
                     }
-                }
-                let mut fill = [0.1, 0.1, 0.1, 1.0];
-                if let ExecResult::Value(RelType::Array(arr)) = self.evaluate(fill_node) {
-                    for (i, v) in arr.iter().enumerate().take(4) {
-                        fill[i] = match v {
-                            RelType::Float(f) => *f as f32,
-                            RelType::Int(v) => *v as f32,
-                            _ => fill[i],
-                        };
-                    }
-                }
+                    out
+                };
+                let accent = parse_rgba(self.evaluate(accent_node), [0.0, 0.5, 1.0, 1.0]);
+                let fill = parse_rgba(self.evaluate(fill_node), [0.1, 0.1, 0.1, 1.0]);
+                let btn_idle = btn_idle_node
+                    .clone()
+                    .map(|n| parse_rgba(self.evaluate(&*n), [0.2, 0.2, 0.2, 1.0]))
+                    .unwrap_or([0.2, 0.2, 0.2, 1.0]);
+                let btn_hover = btn_hover_node
+                    .clone()
+                    .map(|n| parse_rgba(self.evaluate(&*n), [0.3, 0.3, 0.5, 1.0]))
+                    .unwrap_or([0.3, 0.3, 0.5, 1.0]);
                 if let Some(ctx) = &self.egui_ctx {
                     let mut visuals = egui::Visuals::dark();
-                    visuals.window_rounding = egui::Rounding::same(rounding);
-                    visuals.widgets.noninteractive.rounding = egui::Rounding::same(rounding);
-                    visuals.widgets.inactive.rounding = egui::Rounding::same(rounding);
-                    visuals.widgets.hovered.rounding = egui::Rounding::same(rounding);
-                    visuals.widgets.active.rounding = egui::Rounding::same(rounding);
-
-                    let bg = egui::Color32::from_rgba_unmultiplied(
-                        (fill[0] * 255.0) as u8,
-                        (fill[1] * 255.0) as u8,
-                        (fill[2] * 255.0) as u8,
-                        (fill[3] * 255.0) as u8,
-                    );
-                    visuals.window_fill = bg;
-                    visuals.panel_fill = bg;
-
-                    let ac = egui::Color32::from_rgba_unmultiplied(
-                        (accent[0] * 255.0) as u8,
-                        (accent[1] * 255.0) as u8,
-                        (accent[2] * 255.0) as u8,
-                        (accent[3] * 255.0) as u8,
-                    );
-                    visuals.selection.bg_fill = ac;
-
+                    let r = egui::Rounding::same(rounding);
+                    visuals.window_rounding = r;
+                    visuals.widgets.noninteractive.rounding = r;
+                    visuals.widgets.inactive.rounding = r;
+                    visuals.widgets.hovered.rounding = r;
+                    visuals.widgets.active.rounding = r;
+                    let rgba = |c: [f32; 4]| {
+                        egui::Color32::from_rgba_unmultiplied(
+                            (c[0] * 255.0) as u8,
+                            (c[1] * 255.0) as u8,
+                            (c[2] * 255.0) as u8,
+                            (c[3] * 255.0) as u8,
+                        )
+                    };
+                    visuals.window_fill = rgba(fill);
+                    visuals.panel_fill = rgba(fill);
+                    visuals.selection.bg_fill = rgba(accent);
+                    visuals.widgets.inactive.weak_bg_fill = rgba(btn_idle);
+                    visuals.widgets.inactive.bg_fill = rgba(btn_idle);
+                    visuals.widgets.hovered.weak_bg_fill = rgba(btn_hover);
+                    visuals.widgets.hovered.bg_fill = rgba(btn_hover);
                     ctx.set_visuals(visuals);
-
                     let mut style = (*ctx.style()).clone();
                     style.spacing.item_spacing = egui::vec2(spacing, spacing);
                     style.spacing.window_margin = egui::Margin::same(spacing);
                     ctx.set_style(style);
+                }
+                ExecResult::Value(RelType::Void)
+            }
+            Node::UIHorizontal(body) => {
+                if let Some(ui_ptr) = self.egui_ui_ptr {
+                    unsafe {
+                        (*ui_ptr).horizontal(|ui| {
+                            self.egui_ui_ptr = Some(ui as *mut egui::Ui);
+                            self.evaluate(body);
+                            self.egui_ui_ptr = None;
+                        });
+                        self.egui_ui_ptr = Some(ui_ptr);
+                    }
+                }
+                ExecResult::Value(RelType::Void)
+            }
+            Node::UIFullscreen(body) => {
+                if let Some(ctx) = self.egui_ctx.clone() {
+                    let screen_rect = ctx.available_rect();
+                    egui::Window::new("__fullscreen__")
+                        .fixed_rect(screen_rect)
+                        .title_bar(false)
+                        .frame(egui::Frame::none())
+                        .show(&ctx, |ui| {
+                            self.egui_ui_ptr = Some(ui as *mut egui::Ui);
+                            self.evaluate(body);
+                            self.egui_ui_ptr = None;
+                        });
                 }
                 ExecResult::Value(RelType::Void)
             }

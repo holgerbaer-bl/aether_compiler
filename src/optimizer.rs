@@ -108,10 +108,20 @@ pub fn count_nodes(node: &Node) -> usize {
         | Node::PlaySample(w, h, t) => {
             count += count_nodes(w) + count_nodes(h) + count_nodes(t);
         }
-        Node::RenderAsset(a, b, c, d)
-        | Node::SetVoxel(a, b, c, d)
-        | Node::UISetStyle(a, b, c, d) => {
+        Node::RenderAsset(a, b, c, d) | Node::SetVoxel(a, b, c, d) => {
             count += count_nodes(a) + count_nodes(b) + count_nodes(c) + count_nodes(d);
+        }
+        Node::UISetStyle(a, b, c, d, opt_e, opt_f) => {
+            count += count_nodes(a) + count_nodes(b) + count_nodes(c) + count_nodes(d);
+            if let Some(e) = opt_e {
+                count += count_nodes(e);
+            }
+            if let Some(f) = opt_f {
+                count += count_nodes(f);
+            }
+        }
+        Node::UIHorizontal(b) | Node::UIFullscreen(b) => {
+            count += count_nodes(b);
         }
         Node::ArraySet(a, b, c) | Node::MapSet(a, b, c) => {
             count += count_nodes(a) + count_nodes(b) + count_nodes(c);
@@ -296,13 +306,16 @@ pub fn optimize(node: Node) -> Node {
         Node::UILabel(t) => Node::UILabel(Box::new(optimize(*t))),
         Node::UIButton(t) => Node::UIButton(Box::new(optimize(*t))),
         Node::UITextInput(v) => Node::UITextInput(Box::new(optimize(*v))),
-        Node::UISetStyle(r, s, a, f) => Node::UISetStyle(
+        Node::UISetStyle(r, s, a, f, bi, bh) => Node::UISetStyle(
             Box::new(optimize(*r)),
             Box::new(optimize(*s)),
             Box::new(optimize(*a)),
             Box::new(optimize(*f)),
+            bi.map(|n| Box::new(optimize(*n))),
+            bh.map(|n| Box::new(optimize(*n))),
         ),
-
+        Node::UIHorizontal(b) => Node::UIHorizontal(Box::new(optimize(*b))),
+        Node::UIFullscreen(b) => Node::UIFullscreen(Box::new(optimize(*b))),
         Node::InitCamera(f) => Node::InitCamera(Box::new(optimize(*f))),
         Node::DrawVoxelGrid(v) => Node::DrawVoxelGrid(Box::new(optimize(*v))),
         Node::LoadTextureAtlas(p, s) => {

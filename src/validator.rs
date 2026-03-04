@@ -210,13 +210,26 @@ impl Validator {
                 self.check_node(v);
                 self.check_node(m);
             }
-            Node::RenderAsset(s, m, t, u)
-            | Node::SetVoxel(s, m, t, u)
-            | Node::UISetStyle(s, m, t, u) => {
+            Node::RenderAsset(s, m, t, u) | Node::SetVoxel(s, m, t, u) => {
                 self.check_node(s);
                 self.check_node(m);
                 self.check_node(t);
                 self.check_node(u);
+            }
+            Node::UISetStyle(r, s, a, f, bi, bh) => {
+                self.check_node(r);
+                self.check_node(s);
+                self.check_node(a);
+                self.check_node(f);
+                if let Some(n) = bi {
+                    self.check_node(n);
+                }
+                if let Some(n) = bh {
+                    self.check_node(n);
+                }
+            }
+            Node::UIHorizontal(b) | Node::UIFullscreen(b) => {
+                self.check_node(b);
             }
             Node::DrawText(t, x, y, s, c) => {
                 self.check_node(t);

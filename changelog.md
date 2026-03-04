@@ -5,6 +5,22 @@
 
 ---
 
+## [v0.55.0] - Sprint 55: The UI Hardening Sprint
+Resolved critical UI type inconsistencies and introduced native horizontal layout and fullscreen panel nodes.
+
+### Fixed
+- **`UIButton` Type Mismatch (#1):** `UIButton` now returns `RelType::Bool` instead of `RelType::Int`. Direct use as an `If`-condition now works natively without type coercion.
+- **`RelType::Display` Annotation (#2):** `Display` now renders pure human-readable values (`42`, `true`, `hello`). Debugging output (with type tags) has been moved to the `Debug` trait. The internal `execute()` test harness uses `Debug` to keep test suite unbroken.
+- **Egui Depth Buffer (#6):** Confirmed that the Egui 2D render pass uses `depth_view_opt` which resolves to `None` for 2D-only renderering. No Z-test on UI passes.
+- **Windows EventLoop (#7):** Confirmed `with_any_thread(true)` fix already in place from Sprint 54.
+
+### Added
+- **`UIHorizontal(Box<Node>)`**: Renders child nodes side-by-side in a single egui horizontal layout row. Enables button grids, toolbars, and multi-column forms.
+- **`UIFullscreen(Box<Node>)`**: Renders a borderless, zero-title-bar panel covering the entire canvas. Ideal for immersive game HUDs and full-screen overlay UIs.
+- **`UISetStyle` Button Colors (#5):** Extended `UISetStyle` to 6 arguments with two optional trailing RGBA arrays for `button_idle` and `button_hover` colors. Backward-compatible: scripts using only 4 args still work.
+
+---
+
 ## [v0.54.0] - Sprint 54: The Styling & Persistence Update
 Introduced panic-resilient File I/O mappings and dynamic EGUI stylistic overrides powered natively by the JSON AST.
 

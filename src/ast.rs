@@ -92,9 +92,18 @@ pub enum Node {
     // Egui UI
     UIWindow(Box<Node>, Box<Node>), // Title (String), Children (Block)
     UILabel(Box<Node>),             // Text (String)
-    UIButton(Box<Node>),            // Text (String). Evaluates to Boolean (Clicked)
+    UIButton(Box<Node>),            // Text (String). Evaluates to Bool (true if clicked this frame)
     UITextInput(Box<Node>),         // Variable Name to bind to (String)
-    UISetStyle(Box<Node>, Box<Node>, Box<Node>, Box<Node>), // Rounding, Spacing, Accent Config Array, Window Fill Config Array
+    UISetStyle(
+        Box<Node>,
+        Box<Node>,
+        Box<Node>,
+        Box<Node>,
+        Option<Box<Node>>,
+        Option<Box<Node>>,
+    ), // Rounding, Spacing, Accent RGBA, Fill RGBA, Button Idle RGBA (opt), Button Hover RGBA (opt)
+    UIHorizontal(Box<Node>),        // Render children side-by-side (horizontal layout)
+    UIFullscreen(Box<Node>),        // Render children in a full-canvas borderless panel
 
     // Voxel Engine (Sprint 12 & 13)
     InitCamera(Box<Node>),    // FOV (Float). Activates 3D FPS camera
