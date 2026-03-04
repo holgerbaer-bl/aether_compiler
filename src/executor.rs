@@ -914,6 +914,71 @@ impl ExecutionEngine {
                 }
                 ExecResult::Value(RelType::Void)
             }
+            Node::UISetStyle(rounding_node, spacing_node, accent_node, fill_node) => {
+                let rounding = match self.evaluate(rounding_node) {
+                    ExecResult::Value(RelType::Float(f)) => f as f32,
+                    ExecResult::Value(RelType::Int(i)) => i as f32,
+                    _ => 4.0,
+                };
+                let spacing = match self.evaluate(spacing_node) {
+                    ExecResult::Value(RelType::Float(f)) => f as f32,
+                    ExecResult::Value(RelType::Int(i)) => i as f32,
+                    _ => 8.0,
+                };
+                let mut accent = [0.0, 0.5, 1.0, 1.0];
+                if let ExecResult::Value(RelType::Array(arr)) = self.evaluate(accent_node) {
+                    for (i, v) in arr.iter().enumerate().take(4) {
+                        accent[i] = match v {
+                            RelType::Float(f) => *f as f32,
+                            RelType::Int(v) => *v as f32,
+                            _ => accent[i],
+                        };
+                    }
+                }
+                let mut fill = [0.1, 0.1, 0.1, 1.0];
+                if let ExecResult::Value(RelType::Array(arr)) = self.evaluate(fill_node) {
+                    for (i, v) in arr.iter().enumerate().take(4) {
+                        fill[i] = match v {
+                            RelType::Float(f) => *f as f32,
+                            RelType::Int(v) => *v as f32,
+                            _ => fill[i],
+                        };
+                    }
+                }
+                if let Some(ctx) = &self.egui_ctx {
+                    let mut visuals = egui::Visuals::dark();
+                    visuals.window_rounding = egui::Rounding::same(rounding);
+                    visuals.widgets.noninteractive.rounding = egui::Rounding::same(rounding);
+                    visuals.widgets.inactive.rounding = egui::Rounding::same(rounding);
+                    visuals.widgets.hovered.rounding = egui::Rounding::same(rounding);
+                    visuals.widgets.active.rounding = egui::Rounding::same(rounding);
+
+                    let bg = egui::Color32::from_rgba_unmultiplied(
+                        (fill[0] * 255.0) as u8,
+                        (fill[1] * 255.0) as u8,
+                        (fill[2] * 255.0) as u8,
+                        (fill[3] * 255.0) as u8,
+                    );
+                    visuals.window_fill = bg;
+                    visuals.panel_fill = bg;
+
+                    let ac = egui::Color32::from_rgba_unmultiplied(
+                        (accent[0] * 255.0) as u8,
+                        (accent[1] * 255.0) as u8,
+                        (accent[2] * 255.0) as u8,
+                        (accent[3] * 255.0) as u8,
+                    );
+                    visuals.selection.bg_fill = ac;
+
+                    ctx.set_visuals(visuals);
+
+                    let mut style = (*ctx.style()).clone();
+                    style.spacing.item_spacing = egui::vec2(spacing, spacing);
+                    style.spacing.window_margin = egui::Margin::same(spacing);
+                    ctx.set_style(style);
+                }
+                ExecResult::Value(RelType::Void)
+            }
             Node::Lt(l, r) => {
                 let lv = self.evaluate(l);
                 let rv = self.evaluate(r);

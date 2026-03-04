@@ -51,6 +51,8 @@ The `build` command:
 | **Visual Cortex** | `registry_gpu_init()` initialises a real WGPU device; `registry_fill_color()` for rendering |
 | **AOT Codegen** | Transpiler emits type-safe Rust with automatic `registry_release()` injected at scope exit |
 | **AST Optimiser** | Constant folding + dead code elimination before execution or compilation |
+| **I/O Persistence** | Safe disk reads/writes (`registry_read_file`, `registry_write_file`) bridging filesystem and AST |
+| **Global UI Styling** | Shape EGUI aesthetics natively via AST (`UISetStyle` for rounding, spacing, colors) |
 
 ---
 

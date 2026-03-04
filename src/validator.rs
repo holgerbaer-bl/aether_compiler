@@ -210,7 +210,9 @@ impl Validator {
                 self.check_node(v);
                 self.check_node(m);
             }
-            Node::RenderAsset(s, m, t, u) | Node::SetVoxel(s, m, t, u) => {
+            Node::RenderAsset(s, m, t, u)
+            | Node::SetVoxel(s, m, t, u)
+            | Node::UISetStyle(s, m, t, u) => {
                 self.check_node(s);
                 self.check_node(m);
                 self.check_node(t);

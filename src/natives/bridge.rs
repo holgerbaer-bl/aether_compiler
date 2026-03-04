@@ -636,6 +636,41 @@ impl BridgeModule for CoreBridge {
                         "[FFI] registry_get_last_char expects 0 args".to_string(),
                     ))
                 }
+                "registry_read_file" => {
+                    if args.len() == 1 {
+                        if let RelType::Str(path) = &args[0] {
+                            let content =
+                                crate::natives::registry::registry_read_file(path.clone());
+                            return Some(ExecResult::Value(RelType::Str(content)));
+                        }
+                    }
+                    Some(ExecResult::Fault(
+                        "[FFI] registry_read_file expects 1 String arg".to_string(),
+                    ))
+                }
+                "registry_write_file" => {
+                    if args.len() == 2 {
+                        if let (RelType::Str(path), RelType::Str(content)) = (&args[0], &args[1]) {
+                            let ok = crate::natives::registry::registry_write_file(
+                                path.clone(),
+                                content.clone(),
+                            );
+                            return Some(ExecResult::Value(RelType::Bool(ok)));
+                        }
+                    }
+                    Some(ExecResult::Fault(
+                        "[FFI] registry_write_file expects 2 String args".to_string(),
+                    ))
+                }
+                "registry_get_ultimate_answer" => {
+                    if args.is_empty() {
+                        let answer = crate::natives::registry::registry_get_ultimate_answer();
+                        return Some(ExecResult::Value(RelType::Int(answer)));
+                    }
+                    Some(ExecResult::Fault(
+                        "[FFI] registry_get_ultimate_answer expects 0 args".to_string(),
+                    ))
+                }
                 _ => None,
             }
         } else {

@@ -94,6 +94,7 @@ pub enum Node {
     UILabel(Box<Node>),             // Text (String)
     UIButton(Box<Node>),            // Text (String). Evaluates to Boolean (Clicked)
     UITextInput(Box<Node>),         // Variable Name to bind to (String)
+    UISetStyle(Box<Node>, Box<Node>, Box<Node>, Box<Node>), // Rounding, Spacing, Accent Config Array, Window Fill Config Array
 
     // Voxel Engine (Sprint 12 & 13)
     InitCamera(Box<Node>),    // FOV (Float). Activates 3D FPS camera

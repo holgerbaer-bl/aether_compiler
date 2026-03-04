@@ -6,7 +6,7 @@ use std::io::Write;
 use std::sync::Arc;
 use std::sync::Mutex;
 use wgpu::util::DeviceExt;
-use winit::{event_loop::EventLoop, window::Window as WinitWindow};
+use winit::window::Window as WinitWindow;
 
 use std::collections::HashSet;
 use winit::keyboard::{KeyCode, PhysicalKey};
@@ -1168,7 +1168,7 @@ pub fn registry_draw_quad_3d(
         None
     });
 
-    let (tw, th, bind_group) = match tex_data {
+    let (_tw, _th, bind_group) = match tex_data {
         Some(d) => d,
         None => return,
     };
@@ -1354,4 +1354,16 @@ pub fn registry_get_last_char() -> i64 {
         }
     });
     last
+}
+
+pub fn registry_read_file(path: String) -> String {
+    std::fs::read_to_string(&path).unwrap_or_else(|_| "".to_string())
+}
+
+pub fn registry_write_file(path: String, content: String) -> bool {
+    std::fs::write(&path, content).is_ok()
+}
+
+pub fn registry_get_ultimate_answer() -> i64 {
+    42
 }

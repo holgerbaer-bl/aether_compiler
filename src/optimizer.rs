@@ -108,7 +108,9 @@ pub fn count_nodes(node: &Node) -> usize {
         | Node::PlaySample(w, h, t) => {
             count += count_nodes(w) + count_nodes(h) + count_nodes(t);
         }
-        Node::RenderAsset(a, b, c, d) | Node::SetVoxel(a, b, c, d) => {
+        Node::RenderAsset(a, b, c, d)
+        | Node::SetVoxel(a, b, c, d)
+        | Node::UISetStyle(a, b, c, d) => {
             count += count_nodes(a) + count_nodes(b) + count_nodes(c) + count_nodes(d);
         }
         Node::ArraySet(a, b, c) | Node::MapSet(a, b, c) => {
@@ -294,6 +296,12 @@ pub fn optimize(node: Node) -> Node {
         Node::UILabel(t) => Node::UILabel(Box::new(optimize(*t))),
         Node::UIButton(t) => Node::UIButton(Box::new(optimize(*t))),
         Node::UITextInput(v) => Node::UITextInput(Box::new(optimize(*v))),
+        Node::UISetStyle(r, s, a, f) => Node::UISetStyle(
+            Box::new(optimize(*r)),
+            Box::new(optimize(*s)),
+            Box::new(optimize(*a)),
+            Box::new(optimize(*f)),
+        ),
 
         Node::InitCamera(f) => Node::InitCamera(Box::new(optimize(*f))),
         Node::DrawVoxelGrid(v) => Node::DrawVoxelGrid(Box::new(optimize(*v))),

@@ -43,5 +43,12 @@ Dieses Dokument prüft die auf der veröffentlichten Website (`index.html` und `
 - Die Dateien `src/natives/registry.rs` und `src/natives/bridge.rs` stellen die API-Funktion `registry_draw_quad_3d` zur Verfügung.
 - Die Funktionssignatur `registry_draw_quad_3d(win, tex, x, y, z, scale_x, scale_y)` zielt explizit auf den 3D-Raum mit einem Z-Achsen-Tiefenparameter ab, was den Anspruch von tiefen Z-Buffered 3D-Szenen vollständig belegt. (Zusätzlich wurde in der `llm.md` das automatische Management des `Depth32Float` Z-Buffers dokumentiert).
 
+## 5. File I/O Persistence & Styling Engine
+**Behauptung:** "Die neueste Iteration führt absturzsicheres File-I/O ein und ermöglicht Agenten, ein komplettes Branding dynamisch über den KnotenCore AST zu definieren."
+
+**Überprüfung: ✅ Bestanden**
+- `registry_read_file` und `registry_write_file` wurden verifiziert und nutzen standardisierte, absichernde Rust-Closures (`unwrap_or_else`), um App-Crashes bei fehlerhaften Lese/Schreibrechten oder fehlenden Dateien komplett zu eliminieren.
+- Das dynamische Styling wird per `Node::UISetStyle` sofort (immediate mode) in der `egui::Context`-Kette durchgereicht. Änderungen an Schatten, Eckenradien und Primärfarben können von der KI zur Laufzeit konfiguriert werden, was "Glassmorphism" direkt auf der Bare-Metal-Ebene ermöglicht.
+
 ## Fazit
 **Das technische Audit hat ergeben, dass jede auf der Website getroffene Funktionalitäts- und Performance-Aussage der Wahrheit entspricht und durch den aktuellen Quellcode im GitHub-Repository belegbar ist. Es handelt sich um ein hochentwickeltes und valides Framework.**

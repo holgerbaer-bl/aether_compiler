@@ -149,6 +149,7 @@ Triggers an asynchronous, polyphonic audio stream natively out of the thread loo
 *   **`UILabel(Box<Node>)`**: Takes Text (String) and renders a formatted text label within the current UI context.
 *   **`UIButton(Box<Node>)`**: Takes Text (String). Renders a clickable button in the UI context. Returns `Int` 1 if clicked this frame, 0 otherwise.
 *   **`UITextInput(Box<Node>)`**: Takes a Variable Name (String). Instantiates a single-line text input field inextricably linked to that variable in the ambient memory store, reacting to keyboard polling and cursor selection automatically.
+*   **`UISetStyle(Box<Node>, Box<Node>, Box<Node>, Box<Node>)`**: Applies visual tweaks to the EGUI context globally. Configures Rounding (Float), Spacing (Float), Accent Color (Array of 4 Floats), and Window Fill (Array of 4 Floats).
 
 ### 4.13. Control Flow
 *   **`Import(String)`**: Imports another KnotenCore executable JSON file by path, making its top-level definitions and variable assignments available in the current global scope.
