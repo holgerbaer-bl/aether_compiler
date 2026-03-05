@@ -175,6 +175,11 @@ fn extract_args(node: &Node) -> Vec<&Node> {
         Node::FileWrite(a, b) => vec![&**a, &**b],
         Node::FSRead(a) => vec![&**a],
         Node::FSWrite(a, b) => vec![&**a, &**b],
+        Node::Fetch {
+            method: _,
+            url: _,
+            callback,
+        } => vec![&**callback],
         Node::Call(_, args) => args.iter().collect(),
         _ => vec![], // Fallback for complex nodes
     }

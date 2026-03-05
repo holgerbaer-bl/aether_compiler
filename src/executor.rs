@@ -220,6 +220,8 @@ pub struct ExecutionEngine {
     pub audio_stream_handle: Option<(rodio::OutputStream, rodio::OutputStreamHandle)>,
     pub samples: HashMap<i64, std::sync::Arc<[u8]>>,
 
+    pub async_bridge: Option<crate::async_bridge::AsyncBridge>,
+
     pub call_stack: Vec<StackFrame>,
 }
 
@@ -294,6 +296,7 @@ impl ExecutionEngine {
             audio_stream: None,
             audio_stream_handle: None,
             samples: HashMap::new(),
+            async_bridge: Some(crate::async_bridge::AsyncBridge::new()),
             call_stack: Vec::new(),
             bridge: Box::new(CoreBridge),
         };
@@ -2250,6 +2253,18 @@ impl ExecutionEngine {
                 }
             }
 
+            Node::Fetch {
+                method,
+                url,
+                callback,
+            } => {
+                if let Some(bridge) = &self.async_bridge {
+                    bridge.dispatch_fetch(method.clone(), url.clone(), callback.clone());
+                    ExecResult::Value(RelType::Void)
+                } else {
+                    ExecResult::Fault("AsyncBridge not initialized".into())
+                }
+            }
             Node::FSRead(path) => {
                 let path_val = self.evaluate(path);
                 if let ExecResult::Value(RelType::Str(p)) = path_val {
@@ -2951,6 +2966,30 @@ impl ExecutionEngine {
                             {
                                 let raw_input = state.take_egui_input(window.as_ref());
                                 ctx.begin_pass(raw_input);
+                            }
+
+                            // Sprint 60: Async Bridge Poll - avoid borrow checker by taking payloads first
+                            let mut payloads: Vec<crate::async_bridge::FetchPayload> = Vec::new();
+                            if let Some(bridge) = &self.engine.async_bridge {
+                                while let Some(payload) = bridge.try_recv() {
+                                    payloads.push(payload);
+                                }
+                            }
+
+                            for payload in payloads {
+                                match payload.payload {
+                                    Ok(json_str) => {
+                                        self.engine.set_var(
+                                            "FETCH_RESULT".to_string(),
+                                            RelType::Str(json_str),
+                                        );
+                                    }
+                                    Err(e) => {
+                                        self.engine
+                                            .set_var("FETCH_ERROR".to_string(), RelType::Str(e));
+                                    }
+                                }
+                                let _ = self.engine.evaluate(&payload.callback_node);
                             }
 
                             let res = self.engine.evaluate(self.body);

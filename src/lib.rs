@@ -1,4 +1,5 @@
 pub mod ast;
+pub mod async_bridge;
 pub mod compiler;
 pub mod dsl_emitter;
 pub mod executor;

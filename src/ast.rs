@@ -55,8 +55,15 @@ pub enum Node {
     FileRead(Box<Node>),
     FileWrite(Box<Node>, Box<Node>),
     Print(Box<Node>),
-    FSRead(Box<Node>),             // Specialized Agent-First File Read
-    FSWrite(Box<Node>, Box<Node>), // Specialized Agent-First File Write
+    FSRead(Box<Node>),             // Specialized Agent I/O
+    FSWrite(Box<Node>, Box<Node>), // Specialized Agent I/O
+
+    // Sprint 60: Async Connectivity
+    Fetch {
+        method: String,
+        url: String,
+        callback: Box<Node>,
+    },
 
     // FFI / Reflection
     EvalJSONNative(Box<Node>),

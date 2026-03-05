@@ -24,10 +24,11 @@ pub enum Token {
     Lt,
     Gt,
     Assign,
-    Arrow, // ->
-    Amp,   // &
-    Shl,   // <<
-    Shr,   // >>
+    Arrow,    // ->
+    FatArrow, // =>
+    Amp,      // &
+    Shl,      // <<
+    Shr,      // >>
     KeywordLet,
     KeywordIf,
     KeywordElse,
@@ -201,6 +202,9 @@ impl<'a> Lexer<'a> {
                 if next_c == '=' {
                     self.advance();
                     Token::EqEq
+                } else if next_c == '>' {
+                    self.advance();
+                    Token::FatArrow
                 } else {
                     Token::Assign
                 }
@@ -371,6 +375,35 @@ impl Parser {
                     self.advance();
                     let block = self.parse_block();
                     return Node::If(Box::new(expr), Box::new(block), None);
+                }
+
+                // Check for fat arrow => { block } for async callbacks (Fetch)
+                if *self.peek() == Token::FatArrow {
+                    self.advance();
+                    let callback = self.parse_block();
+
+                    if let Node::Call(name, args) = expr {
+                        if name == "Fetch" && args.len() == 2 {
+                            let method = if let Node::StringLiteral(s) = &args[0] {
+                                s.clone()
+                            } else {
+                                self.diagnostic_panic("Fetch expects Method as string")
+                            };
+                            let url = if let Node::StringLiteral(s) = &args[1] {
+                                s.clone()
+                            } else {
+                                self.diagnostic_panic("Fetch expects URL as string")
+                            };
+                            return Node::Fetch {
+                                method,
+                                url,
+                                callback: Box::new(callback),
+                            };
+                        }
+                    }
+                    self.diagnostic_panic(
+                        "FatArrow '=>' can only be used with Fetch(method, url) calls",
+                    );
                 }
 
                 if *self.peek() == Token::Semi {

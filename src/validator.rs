@@ -59,6 +59,13 @@ impl Validator {
                 self.check_node(l);
                 self.check_node(r);
             }
+            Node::Fetch {
+                method: _,
+                url: _,
+                callback,
+            } => {
+                self.check_node(callback);
+            }
             Node::ObjectLiteral(map) => {
                 for v in map.values() {
                     self.check_node(v);

@@ -139,6 +139,13 @@ pub fn count_nodes(node: &Node) -> usize {
             count +=
                 count_nodes(a) + count_nodes(b) + count_nodes(c) + count_nodes(d) + count_nodes(e);
         }
+        Node::Fetch {
+            method: _,
+            url: _,
+            callback,
+        } => {
+            count += count_nodes(callback);
+        }
     }
     count
 }
@@ -156,6 +163,15 @@ pub fn optimize(node: Node) -> Node {
         Node::InitVoxelMap => Node::InitVoxelMap,
         Node::InitAudio => Node::InitAudio,
         Node::GetLastKeypress => Node::GetLastKeypress,
+        Node::Fetch {
+            method,
+            url,
+            callback,
+        } => Node::Fetch {
+            method,
+            url,
+            callback: Box::new(optimize(*callback)),
+        },
 
         // Math Folding
         Node::Add(l, r) => optimize_math_op(*l, *r, '+'),
