@@ -64,6 +64,10 @@ pub enum Node {
         url: String,
         callback: Box<Node>,
     },
+    Extract {
+        source: Box<Node>,
+        path: Box<Node>,
+    },
 
     // FFI / Reflection
     EvalJSONNative(Box<Node>),

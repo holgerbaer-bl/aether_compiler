@@ -22,6 +22,26 @@ pub enum RelType {
     Void,
 }
 
+// Sprint 62: Sandboxing Permissions
+#[derive(Clone)]
+pub struct AgentPermissions {
+    pub allow_network: bool,
+    pub allowed_domains: Vec<String>,
+    pub allow_fs_read: bool,
+    pub allow_fs_write: bool,
+}
+
+impl Default for AgentPermissions {
+    fn default() -> Self {
+        Self {
+            allow_network: false, // Strict default
+            allowed_domains: Vec::new(),
+            allow_fs_read: false,
+            allow_fs_write: false,
+        }
+    }
+}
+
 // Manual Clone since Handles require notifying the Registry
 impl Clone for RelType {
     fn clone(&self) -> Self {
@@ -223,6 +243,7 @@ pub struct ExecutionEngine {
     pub async_bridge: Option<crate::async_bridge::AsyncBridge>,
 
     pub ui_dirty: bool, // Sprint 61: Force WGPU redraw after async callback
+    pub permissions: AgentPermissions, // Sprint 62: Sandbox constraints
 
     pub call_stack: Vec<StackFrame>,
 }
@@ -300,6 +321,7 @@ impl ExecutionEngine {
             samples: HashMap::new(),
             async_bridge: Some(crate::async_bridge::AsyncBridge::new()),
             ui_dirty: false,
+            permissions: AgentPermissions::default(),
             call_stack: Vec::new(),
             bridge: Box::new(CoreBridge),
         };
@@ -1757,7 +1779,18 @@ impl ExecutionEngine {
                         }
                     }
 
-                    let mut event_loop = EventLoop::new().unwrap();
+                    // Sprint 61 Bugfix: run_knc spawns a new thread, so Windows panics unless we use any_thread()
+                    #[cfg(target_os = "windows")]
+                    use winit::platform::windows::EventLoopBuilderExtWindows;
+
+                    #[cfg(target_os = "windows")]
+                    let mut event_loop = winit::event_loop::EventLoop::builder()
+                        .with_any_thread(true)
+                        .build()
+                        .unwrap();
+
+                    #[cfg(not(target_os = "windows"))]
+                    let mut event_loop = winit::event_loop::EventLoop::new().unwrap();
                     let mut pump = WindowPump {
                         window: None,
                         width: w as i32,
@@ -2261,6 +2294,13 @@ impl ExecutionEngine {
                 url,
                 callback,
             } => {
+                if !self.permissions.allow_network {
+                    return ExecResult::Fault(
+                        r#"{"diagnostic": {"error": "Permission Denied: Network Access (Fetch)"}}"#
+                            .to_string(),
+                    );
+                }
+
                 if let Some(bridge) = &self.async_bridge {
                     bridge.dispatch_fetch(method.clone(), url.clone(), callback.clone());
                     self.ui_dirty = true; // Sprint 61: Trigger redraw when request dispatched
@@ -2269,7 +2309,59 @@ impl ExecutionEngine {
                     ExecResult::Fault("AsyncBridge not initialized".into())
                 }
             }
+            Node::Extract { source, path } => {
+                let source_val = self.evaluate(source);
+                let path_val = self.evaluate(path);
+
+                if let (
+                    ExecResult::Value(RelType::Str(json_str)),
+                    ExecResult::Value(RelType::Str(p)),
+                ) = (source_val, path_val)
+                {
+                    match serde_json::from_str::<serde_json::Value>(&json_str) {
+                        Ok(mut current) => {
+                            let parts: Vec<&str> = p.split('.').collect();
+                            for part in parts {
+                                if let Some(next) = current.get(part) {
+                                    current = next.clone();
+                                } else {
+                                    return ExecResult::Value(RelType::Void); // Native path not found
+                                }
+                            }
+                            // Convert result to RelType
+                            match current {
+                                serde_json::Value::Null => ExecResult::Value(RelType::Void),
+                                serde_json::Value::Bool(b) => ExecResult::Value(RelType::Bool(b)),
+                                serde_json::Value::Number(n) => {
+                                    if let Some(i) = n.as_i64() {
+                                        ExecResult::Value(RelType::Int(i))
+                                    } else if let Some(f) = n.as_f64() {
+                                        ExecResult::Value(RelType::Float(f))
+                                    } else {
+                                        ExecResult::Value(RelType::Void)
+                                    }
+                                }
+                                serde_json::Value::String(s) => ExecResult::Value(RelType::Str(s)),
+                                serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
+                                    // Complex types can be returned as stringified JSON for further extraction
+                                    ExecResult::Value(RelType::Str(current.to_string()))
+                                }
+                            }
+                        }
+                        Err(_) => ExecResult::Fault("Extract failed: Invalid JSON source".into()),
+                    }
+                } else {
+                    ExecResult::Fault("Extract expects (String JSON, String Path)".into())
+                }
+            }
             Node::FSRead(path) => {
+                if !self.permissions.allow_fs_read {
+                    return ExecResult::Fault(
+                        r#"{"diagnostic": {"error": "Permission Denied: File System Read (FSRead)"}}"#
+                            .to_string(),
+                    );
+                }
+
                 let path_val = self.evaluate(path);
                 if let ExecResult::Value(RelType::Str(p)) = path_val {
                     if let Ok(content) = std::fs::read_to_string(&p) {
@@ -2283,6 +2375,13 @@ impl ExecutionEngine {
             }
 
             Node::FSWrite(path, content_ast) => {
+                if !self.permissions.allow_fs_write {
+                    return ExecResult::Fault(
+                        r#"{"diagnostic": {"error": "Permission Denied: File System Write (FSWrite)"}}"#
+                            .to_string(),
+                    );
+                }
+
                 let path_val = self.evaluate(path);
                 let content_val = self.evaluate(content_ast);
 

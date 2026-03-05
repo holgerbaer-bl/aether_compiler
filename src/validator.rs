@@ -66,6 +66,10 @@ impl Validator {
             } => {
                 self.check_node(callback);
             }
+            Node::Extract { source, path } => {
+                self.check_node(source);
+                self.check_node(path);
+            }
             Node::ObjectLiteral(map) => {
                 for v in map.values() {
                     self.check_node(v);

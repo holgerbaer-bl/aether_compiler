@@ -44,7 +44,18 @@
                         "url": "https://jsonplaceholder.typicode.com/todos/1",
                         "callback": {
                           "Block": [
-                            { "Assign": [ "api_status", { "Concat": [ { "StringLiteral": "[ OK ] Payload: " }, { "Identifier": "FETCH_RESULT" } ] } ] }
+                            { 
+                              "Assign": [ 
+                                "extracted_title", 
+                                { 
+                                  "Extract": {
+                                    "source": { "Identifier": "FETCH_RESULT" },
+                                    "path": { "StringLiteral": "title" }
+                                  } 
+                                } 
+                              ] 
+                            },
+                            { "Assign": [ "api_status", { "Concat": [ { "StringLiteral": "[ OK ] Title: " }, { "Identifier": "extracted_title" } ] } ] }
                           ]
                         }
                       }

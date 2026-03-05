@@ -146,6 +146,9 @@ pub fn count_nodes(node: &Node) -> usize {
         } => {
             count += count_nodes(callback);
         }
+        Node::Extract { source, path } => {
+            count += count_nodes(source) + count_nodes(path);
+        }
     }
     count
 }
@@ -171,6 +174,10 @@ pub fn optimize(node: Node) -> Node {
             method,
             url,
             callback: Box::new(optimize(*callback)),
+        },
+        Node::Extract { source, path } => Node::Extract {
+            source: Box::new(optimize(*source)),
+            path: Box::new(optimize(*path)),
         },
 
         // Math Folding
