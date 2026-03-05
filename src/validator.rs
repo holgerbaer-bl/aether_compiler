@@ -54,8 +54,6 @@ impl Validator {
             | Node::BitAnd(l, r)
             | Node::BitShiftLeft(l, r)
             | Node::BitShiftRight(l, r)
-            | Node::FileWrite(l, r)
-            | Node::UIWindow(l, r)
             | Node::LoadTextureAtlas(l, r)
             | Node::LoadSample(l, r) => {
                 self.check_node(l);
@@ -101,6 +99,7 @@ impl Validator {
             Node::Sin(n)
             | Node::Cos(n)
             | Node::FileRead(n)
+            | Node::FSRead(n)
             | Node::Print(n)
             | Node::EvalJSONNative(n)
             | Node::ToString(n)
@@ -119,6 +118,10 @@ impl Validator {
             | Node::EnablePhysics(n)
             | Node::Return(n) => {
                 self.check_node(n);
+            }
+            Node::FileWrite(f, d) | Node::FSWrite(f, d) => {
+                self.check_node(f);
+                self.check_node(d);
             }
             Node::FnDef(name, params, body) => {
                 if name.is_empty() {
@@ -216,6 +219,10 @@ impl Validator {
                 self.check_node(t);
                 self.check_node(u);
             }
+            Node::UIWindow(_, title, body) => {
+                self.check_node(title);
+                self.check_node(body);
+            }
             Node::UISetStyle(r, s, a, f, bi, bh) => {
                 self.check_node(r);
                 self.check_node(s);
@@ -228,7 +235,10 @@ impl Validator {
                     self.check_node(n);
                 }
             }
-            Node::UIHorizontal(b) | Node::UIFullscreen(b) => {
+            Node::UIHorizontal(b)
+            | Node::UIFullscreen(b)
+            | Node::UIGrid(_, _, b)
+            | Node::UIScrollArea(_, b) => {
                 self.check_node(b);
             }
             Node::DrawText(t, x, y, s, c) => {

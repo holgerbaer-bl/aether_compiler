@@ -34,7 +34,7 @@ pub fn count_nodes(node: &Node) -> usize {
         | Node::MapGet(l, r)
         | Node::MapHasKey(l, r)
         | Node::FileWrite(l, r)
-        | Node::UIWindow(l, r)
+        | Node::FSWrite(l, r)
         | Node::LoadTextureAtlas(l, r)
         | Node::LoadSample(l, r) => {
             count += count_nodes(l) + count_nodes(r);
@@ -42,7 +42,6 @@ pub fn count_nodes(node: &Node) -> usize {
 
         Node::Assign(_, val)
         | Node::ArrayLen(val)
-        | Node::FileRead(val)
         | Node::Print(val)
         | Node::EvalJSONNative(val)
         | Node::ToString(val)
@@ -59,6 +58,8 @@ pub fn count_nodes(node: &Node) -> usize {
         | Node::UIButton(val)
         | Node::UITextInput(val)
         | Node::InitCamera(val)
+        | Node::FileRead(val)
+        | Node::FSRead(val)
         | Node::DrawVoxelGrid(val)
         | Node::EnableInteraction(val)
         | Node::EnablePhysics(val)
@@ -73,6 +74,11 @@ pub fn count_nodes(node: &Node) -> usize {
             if let Some(eb) = else_b {
                 count += count_nodes(eb);
             }
+        }
+        Node::UIWindow(_, title, body) => {
+            // New
+            count += count_nodes(title);
+            count += count_nodes(body);
         }
         Node::While(cond, body) => {
             count += count_nodes(cond) + count_nodes(body);
@@ -120,7 +126,10 @@ pub fn count_nodes(node: &Node) -> usize {
                 count += count_nodes(f);
             }
         }
-        Node::UIHorizontal(b) | Node::UIFullscreen(b) => {
+        Node::UIHorizontal(b)
+        | Node::UIFullscreen(b)
+        | Node::UIGrid(_, _, b)
+        | Node::UIScrollArea(_, b) => {
             count += count_nodes(b);
         }
         Node::ArraySet(a, b, c) | Node::MapSet(a, b, c) => {
@@ -233,6 +242,10 @@ pub fn optimize(node: Node) -> Node {
             Box::new(optimize(*v)),
         ),
         Node::MapHasKey(m, k) => Node::MapHasKey(Box::new(optimize(*m)), Box::new(optimize(*k))),
+        Node::UIWindow(id, title, block) => {
+            // Modified
+            Node::UIWindow(id, Box::new(optimize(*title)), Box::new(optimize(*block)))
+        }
         Node::Index(arr, index) => {
             Node::Index(Box::new(optimize(*arr)), Box::new(optimize(*index)))
         }
@@ -255,10 +268,10 @@ pub fn optimize(node: Node) -> Node {
         Node::Cos(val) => Node::Cos(Box::new(optimize(*val))),
 
         Node::Mat4Mul(l, r) => Node::Mat4Mul(Box::new(optimize(*l)), Box::new(optimize(*r))),
-        Node::FileRead(path) => Node::FileRead(Box::new(optimize(*path))),
-        Node::FileWrite(path, content) => {
-            Node::FileWrite(Box::new(optimize(*path)), Box::new(optimize(*content)))
-        }
+        Node::FileRead(f) => Node::FileRead(Box::new(optimize(*f))), // Modified
+        Node::FSRead(f) => Node::FSRead(Box::new(optimize(*f))),     // New
+        Node::FileWrite(f, d) => Node::FileWrite(Box::new(optimize(*f)), Box::new(optimize(*d))), // Modified
+        Node::FSWrite(f, d) => Node::FSWrite(Box::new(optimize(*f)), Box::new(optimize(*d))), // New
         Node::Print(val) => Node::Print(Box::new(optimize(*val))),
         Node::EvalJSONNative(val) => Node::EvalJSONNative(Box::new(optimize(*val))),
         Node::ToString(val) => Node::ToString(Box::new(optimize(*val))),
@@ -301,8 +314,6 @@ pub fn optimize(node: Node) -> Node {
             Box::new(optimize(*s)),
             Box::new(optimize(*c)),
         ),
-
-        Node::UIWindow(t, b) => Node::UIWindow(Box::new(optimize(*t)), Box::new(optimize(*b))),
         Node::UILabel(t) => Node::UILabel(Box::new(optimize(*t))),
         Node::UIButton(t) => Node::UIButton(Box::new(optimize(*t))),
         Node::UITextInput(v) => Node::UITextInput(Box::new(optimize(*v))),
@@ -316,6 +327,8 @@ pub fn optimize(node: Node) -> Node {
         ),
         Node::UIHorizontal(b) => Node::UIHorizontal(Box::new(optimize(*b))),
         Node::UIFullscreen(b) => Node::UIFullscreen(Box::new(optimize(*b))),
+        Node::UIGrid(cols, id, body) => Node::UIGrid(cols, id, Box::new(optimize(*body))),
+        Node::UIScrollArea(id, body) => Node::UIScrollArea(id, Box::new(optimize(*body))),
         Node::InitCamera(f) => Node::InitCamera(Box::new(optimize(*f))),
         Node::DrawVoxelGrid(v) => Node::DrawVoxelGrid(Box::new(optimize(*v))),
         Node::LoadTextureAtlas(p, s) => {

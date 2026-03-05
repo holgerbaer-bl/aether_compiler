@@ -875,19 +875,21 @@ impl ExecutionEngine {
                     _ => ExecResult::Fault("Invalid Eq semantics".to_string()),
                 }
             }
-            // Egui UI (Sprint 10)
-            Node::UIWindow(title, body) => {
+            // Egui UI (Sprint 10 & 59)
+            Node::UIWindow(id, title, body) => {
                 let title_val = self.evaluate(title);
                 let title_str = match title_val {
                     ExecResult::Value(RelType::Str(s)) => s,
                     _ => "Knoten Window".to_string(),
                 };
                 if let Some(ctx) = self.egui_ctx.clone() {
-                    egui::Window::new(title_str).show(&ctx, |ui| {
-                        self.egui_ui_ptr = Some(ui as *mut egui::Ui);
-                        self.evaluate(body);
-                        self.egui_ui_ptr = None;
-                    });
+                    egui::Window::new(title_str)
+                        .id(egui::Id::new(id))
+                        .show(&ctx, |ui| {
+                            self.egui_ui_ptr = Some(ui as *mut egui::Ui);
+                            self.evaluate(body);
+                            self.egui_ui_ptr = None;
+                        });
                 }
                 ExecResult::Value(RelType::Void)
             }
@@ -1035,6 +1037,52 @@ impl ExecutionEngine {
                             self.evaluate(body);
                             self.egui_ui_ptr = None;
                         });
+                }
+                ExecResult::Value(RelType::Void)
+            }
+            Node::UIGrid(columns, id, body) => {
+                if let Some(ui_ptr) = self.egui_ui_ptr {
+                    unsafe {
+                        egui::Grid::new(id).num_columns(*columns as usize).show(
+                            &mut *ui_ptr,
+                            |ui| {
+                                let old_ui_ptr = self.egui_ui_ptr;
+                                self.egui_ui_ptr = Some(ui as *mut egui::Ui);
+
+                                if let Node::Block(nodes) = &**body {
+                                    let mut col_count = 0;
+                                    for node in nodes {
+                                        self.evaluate(node);
+                                        col_count += 1;
+                                        if col_count >= *columns {
+                                            ui.end_row();
+                                            col_count = 0;
+                                        }
+                                    }
+                                } else {
+                                    self.evaluate(body);
+                                    ui.end_row();
+                                }
+
+                                self.egui_ui_ptr = old_ui_ptr;
+                            },
+                        );
+                    }
+                }
+                ExecResult::Value(RelType::Void)
+            }
+            Node::UIScrollArea(id, body) => {
+                if let Some(ui_ptr) = self.egui_ui_ptr {
+                    unsafe {
+                        egui::ScrollArea::both()
+                            .id_salt(id)
+                            .show(&mut *ui_ptr, |ui| {
+                                let old_ui_ptr = self.egui_ui_ptr;
+                                self.egui_ui_ptr = Some(ui as *mut egui::Ui);
+                                self.evaluate(body);
+                                self.egui_ui_ptr = old_ui_ptr;
+                            });
+                    }
                 }
                 ExecResult::Value(RelType::Void)
             }
@@ -2199,6 +2247,40 @@ impl ExecutionEngine {
                     }
                 } else {
                     ExecResult::Fault("LoadFont expects String path".to_string())
+                }
+            }
+
+            Node::FSRead(path) => {
+                let path_val = self.evaluate(path);
+                if let ExecResult::Value(RelType::Str(p)) = path_val {
+                    if let Ok(content) = std::fs::read_to_string(&p) {
+                        ExecResult::Value(RelType::Str(content))
+                    } else {
+                        ExecResult::Fault(format!("FSRead failed to read file: {}", p))
+                    }
+                } else {
+                    ExecResult::Fault("FSRead expects a String path".to_string())
+                }
+            }
+
+            Node::FSWrite(path, content_ast) => {
+                let path_val = self.evaluate(path);
+                let content_val = self.evaluate(content_ast);
+
+                match (path_val, content_val) {
+                    (
+                        ExecResult::Value(RelType::Str(p)),
+                        ExecResult::Value(RelType::Str(content)),
+                    ) => {
+                        if std::fs::write(&p, content).is_ok() {
+                            ExecResult::Value(RelType::Void)
+                        } else {
+                            ExecResult::Fault(format!("FSWrite failed to write to file: {}", p))
+                        }
+                    }
+                    _ => ExecResult::Fault(
+                        "FSWrite expects (String path, String content)".to_string(),
+                    ),
                 }
             }
             Node::DrawText(text_n, x_n, y_n, size_n, color_n) => {

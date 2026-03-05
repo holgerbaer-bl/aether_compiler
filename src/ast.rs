@@ -51,10 +51,12 @@ pub enum Node {
     FnDef(String, Vec<String>, Box<Node>),
     Call(String, Vec<Node>),
 
-    // I/O
+    // I/O & System Nodes (Sprint 59 extensions)
     FileRead(Box<Node>),
     FileWrite(Box<Node>, Box<Node>),
     Print(Box<Node>),
+    FSRead(Box<Node>),             // Specialized Agent-First File Read
+    FSWrite(Box<Node>, Box<Node>), // Specialized Agent-First File Write
 
     // FFI / Reflection
     EvalJSONNative(Box<Node>),
@@ -90,10 +92,10 @@ pub enum Node {
     GetLastKeypress,                                                 // Returns String buffer
 
     // Egui UI
-    UIWindow(Box<Node>, Box<Node>), // Title (String), Children (Block)
-    UILabel(Box<Node>),             // Text (String)
-    UIButton(Box<Node>),            // Text (String). Evaluates to Bool (true if clicked this frame)
-    UITextInput(Box<Node>),         // Variable Name to bind to (String)
+    UIWindow(String, Box<Node>, Box<Node>), // ID (String), Title (StringNode), Children (Block)
+    UILabel(Box<Node>),                     // Text (String)
+    UIButton(Box<Node>), // Text (String). Evaluates to Bool (true if clicked this frame)
+    UITextInput(Box<Node>), // Variable Name to bind to (String)
     UISetStyle(
         Box<Node>,
         Box<Node>,
@@ -102,8 +104,10 @@ pub enum Node {
         Option<Box<Node>>,
         Option<Box<Node>>,
     ), // Rounding, Spacing, Accent RGBA, Fill RGBA, Button Idle RGBA (opt), Button Hover RGBA (opt)
-    UIHorizontal(Box<Node>),        // Render children side-by-side (horizontal layout)
-    UIFullscreen(Box<Node>),        // Render children in a full-canvas borderless panel
+    UIHorizontal(Box<Node>), // Render children side-by-side (horizontal layout)
+    UIFullscreen(Box<Node>), // Render children in a full-canvas borderless panel
+    UIGrid(i64, String, Box<Node>), // Columns, ID, Body
+    UIScrollArea(String, Box<Node>), // ID, Body for native scrolling view
 
     // Voxel Engine (Sprint 12 & 13)
     InitCamera(Box<Node>),    // FOV (Float). Activates 3D FPS camera

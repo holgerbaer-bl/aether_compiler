@@ -1,0 +1,48 @@
+name: Cross-Platform Release Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: knoten_core-linux
+            asset_name: knoten_core-linux-amd64
+          - os: windows-latest
+            artifact_name: knoten_core-windows.exe
+            asset_name: knoten_core-windows-amd64.exe
+          - os: macos-latest
+            artifact_name: knoten_core-macos
+            asset_name: knoten_core-macos-amd64
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Build run_knc Release
+      run: cargo build --release --bin run_knc
+
+    - name: Build knoten_upgrade Release
+      run: cargo build --release --bin knoten_upgrade
+
+    - name: Upload Artifact (run_knc)
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ matrix.asset_name }}
+        path: target/release/run_knc${{ matrix.os == 'windows-latest' && '.exe' || '' }}
+
+    - name: Upload Artifact (knoten_upgrade)
+      uses: actions/upload-artifact@v3
+      with:
+        name: knoten_upgrade-${{ matrix.asset_name }}
+        path: target/release/knoten_upgrade${{ matrix.os == 'windows-latest' && '.exe' || '' }}

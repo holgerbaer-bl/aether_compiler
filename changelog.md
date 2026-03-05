@@ -5,6 +5,40 @@
 
 ---
 
+## [v0.58.0] - Sprint 58: Neural Syntax (Agent-to-Agent DSL)
+Replaced verbose JSON AST with a high-density, closure-based DSL designed for maximum AI parsing efficiency and token compression.
+
+### Added
+- **High-Density Parser (`parser.rs`)**: Custom zero-dependency Lexer and recursive descent AST parser specifically reading `.knoten` files.
+- **Knoten-Transpiler (`dsl_emitter.rs`, `knoten_upgrade.rs`)**: AST formatting engine that auto-upgrades existing `.nod`/`.json` trees into their perfectly equivalent `.knoten` DSL syntax.
+- **Cross-Platform Compilation Workflow**: Introduced `.github/workflows/release.yml` automating binary releases (<5MB) for macOS, Linux, and Windows.
+
+### Changed
+- `run_knc` automatically executes `serde_json` or the new `Parser` based on file extension (`.nod`/`.json` vs `.knoten`).
+
+---
+
+## [v0.57.0] - Sprint 57: State & Scroll (The Technical Deep Dive)
+Introduced infinite scrolling capabilities, aggressive binary slimming, and drafted the next-generation Knoten-DSL.
+
+### Added
+- **`UIScrollArea(String, Box<Node>)`**: Native implementation of `egui::ScrollArea`. Eliminates the previous UI cap limitations by enabling dynamic, scrollable lists of unbounded depth.
+- **Knoten-DSL Draft (`KNOTEN_DSL_DRAFT.md`)**: Proposed human-readable, closure-based curly brace syntax to replace raw JSON AST authoring.
+
+### Changed
+- **Binary Slimming (`Cargo.toml`)**: Reconfigured `[profile.release]` with `lto = "fat"`, `codegen-units = 1`, `opt-level = "z"`, and `strip = true` to aggressively condense the final binary footprint towards the <5MB objective.
+
+---
+
+## [v0.56.0] - Sprint 56: The Grid Layout Update
+Introduced native Egui Grid support for high-precision UI distributions.
+
+### Added
+- **`UIGrid(i64, String, Box<Node>)`**: Implemented `egui::Grid` wrapper with autonomous `end_row()` management. Optimized for uniform 2D layouts (calculators, dashboards).
+- **Auto-Row Management**: The executor now tracks column counts within `UIGrid` blocks and triggers row termination automatically after N elements.
+
+---
+
 ## [v0.55.0] - Sprint 55: The UI Hardening Sprint
 Resolved critical UI type inconsistencies and introduced native horizontal layout and fullscreen panel nodes.
 

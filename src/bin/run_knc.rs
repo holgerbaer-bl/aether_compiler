@@ -70,7 +70,12 @@ fn run() {
     println!("Loading KnotenCore Script: {}", file_path);
 
     let json_string = fs::read_to_string(&file_path).expect("Failed to read file");
-    let mut ast = serde_json::from_str(&json_string).expect("Failed to parse KnotenCore JSON AST");
+    let mut ast = if file_path.ends_with(".knoten") {
+        let mut parser = knoten_core::parser::Parser::new(&json_string);
+        parser.parse()
+    } else {
+        serde_json::from_str(&json_string).expect("Failed to parse KnotenCore AST")
+    };
 
     let mut typer = knoten_core::optimizer::TypeChecker::new();
     let _ = typer.check(&ast);
@@ -141,10 +146,16 @@ fn build_standalone(nod_path: &str) {
         eprintln!("Error: Cannot read '{}'", nod_path);
         std::process::exit(1);
     });
-    let mut ast: knoten_core::ast::Node = serde_json::from_str(&json_string).unwrap_or_else(|e| {
-        eprintln!("Error: Invalid AST JSON — {}", e);
-        std::process::exit(1);
-    });
+
+    let mut ast: knoten_core::ast::Node = if nod_path.ends_with(".knoten") {
+        let mut parser = knoten_core::parser::Parser::new(&json_string);
+        parser.parse()
+    } else {
+        serde_json::from_str(&json_string).unwrap_or_else(|e| {
+            eprintln!("Error: Invalid AST JSON — {}", e);
+            std::process::exit(1);
+        })
+    };
 
     let before = knoten_core::optimizer::count_nodes(&ast);
     ast = knoten_core::optimizer::optimize(ast);
