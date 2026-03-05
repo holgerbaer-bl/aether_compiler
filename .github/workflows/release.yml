@@ -29,6 +29,12 @@ jobs:
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@stable
 
+    - name: Install Linux Dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libasound2-dev pkg-config libudev-dev libwayland-dev
+
     - name: Build run_knc Release
       run: cargo build --release --bin run_knc
 
