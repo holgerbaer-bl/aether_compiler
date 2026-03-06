@@ -1,7 +1,6 @@
 use knoten_core::ast::Node;
 use knoten_core::executor::ExecutionEngine;
 use serde_json;
-use std::fs;
 
 fn lit_int(v: i64) -> Node { Node::IntLiteral(v) }
 fn lit_str(v: &str) -> Node { Node::StringLiteral(v.to_string()) }
@@ -168,12 +167,11 @@ fn inject_native_board(ast: &mut Node) {
 }
 
 fn run() {
-    println!("Loading chess_showcase.nod...");
-    let nod_path = "../../examples/graphics/chess_showcase.nod";
-    let json_string = fs::read_to_string(nod_path)
-        .expect("Run chess_builder first to generate the AST!");
-    let mut ast: Node = serde_json::from_str(&json_string)
-        .expect("Failed to parse chess_showcase.nod");
+    println!("Loading chess_showcase.nod (embedded at compile time)...");
+    // AST is baked into the binary — no external file needed at runtime.
+    let json_string = include_str!("../../../examples/graphics/chess_showcase.nod");
+    let mut ast: Node = serde_json::from_str(json_string)
+        .expect("Failed to parse embedded chess_showcase.nod");
 
     println!("Injecting native graphical board (8×8 UIHorizontal rows)...");
     inject_native_board(&mut ast);
