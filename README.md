@@ -4,6 +4,13 @@
 ## 1. What is KnotenCore?
 **KnotenCore** is a high-performance, **Agent-Native** execution engine built entirely in Rust. It compiles and evaluates UI logic, graphics, audio, and state transformations instantly without an intermediate browser layer. Designed not for human boilerplate, but as a deterministic powerhouse that AI Agents can compile to efficiently and autonomously.
 
+### Why "KnotenCore"? (No, it's not a German techno genre)
+Despite sounding like an aggressive underground music style from Berlin, the name actually makes perfect sense for our architecture:
+- **Knoten** is the German word for **Node**. Since our Neural DSL is basically a massive, highly efficient graph of Abstract Syntax Tree (AST) *nodes*, we just went with the German translation because... well, it sounds about 20% more over-engineered.
+- **Core** represents the blazingly fast, bare-metal Rust execution environment that deterministically chews through these nodes without mercy.
+
+So welcome to KnotenCore: Hardcore Nodes. We promise it won't tangle your logic.
+
 ## 2. Why it exists ("Agent First")
 The current app development ecosystem is heavily burdened with human-centric boilerplate, fragmented tooling, and bloated artifact pipelines. KnotenCore eliminates all of this overhead. By providing a **deterministic, token-efficient runtime expressly built for AIs**, it shifts the paradigm from "AI writing React code for humans" to "AI writing Neural DSL code for a bare-metal Agent VM."
 It enables AI agents to read clear diagnostic JSON logs, self-heal instantly upon failure, and deliver highly optimized graphical applications (under 5MB).

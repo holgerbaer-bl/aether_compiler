@@ -58,6 +58,10 @@ pub enum Node {
     FSRead(Box<Node>),             // Specialized Agent I/O
     FSWrite(Box<Node>, Box<Node>), // Specialized Agent I/O
 
+    // AST Erweiterung für universelle Persistenz (Sprint 64)
+    Store { key: String, value: Box<Node> },
+    Load { key: String },
+
     // Sprint 60: Async Connectivity
     Fetch {
         method: String,

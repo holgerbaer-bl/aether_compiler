@@ -2464,6 +2464,59 @@ impl ExecutionEngine {
                     ),
                 }
             }
+
+            Node::Store { key, value } => {
+                if !self.permissions.allow_fs_write {
+                    return ExecResult::Fault("Sandbox: Permission Denied (Store)".to_string());
+                }
+
+                let v_val = self.evaluate_inner(value);
+                if let ExecResult::Value(r) = v_val {
+                    let json_val = match r {
+                        RelType::Int(i) => serde_json::json!(i),
+                        RelType::Float(f) => serde_json::json!(f),
+                        RelType::Bool(b) => serde_json::json!(b),
+                        RelType::Str(s) => serde_json::json!(s),
+                        RelType::Void => serde_json::Value::Null,
+                        _ => serde_json::json!(r.to_string()),
+                    };
+
+                    if let Err(e) = crate::vm::storage::store_value(key, &json_val) {
+                        return ExecResult::Fault(format!("Store failed: {}", e));
+                    }
+                    ExecResult::Value(RelType::Void)
+                } else {
+                    v_val
+                }
+            }
+
+            Node::Load { key } => {
+                if !self.permissions.allow_fs_read {
+                    return ExecResult::Fault("Sandbox: Permission Denied (Load)".to_string());
+                }
+
+                match crate::vm::storage::load_value(key) {
+                    Ok(val) => {
+                        let rel = match val {
+                            serde_json::Value::Null => RelType::Void,
+                            serde_json::Value::Bool(b) => RelType::Bool(b),
+                            serde_json::Value::Number(n) => {
+                                if let Some(i) = n.as_i64() {
+                                    RelType::Int(i)
+                                } else if let Some(f) = n.as_f64() {
+                                    RelType::Float(f)
+                                } else {
+                                    RelType::Void
+                                }
+                            }
+                            serde_json::Value::String(s) => RelType::Str(s),
+                            _ => RelType::Str(val.to_string()),
+                        };
+                        ExecResult::Value(rel)
+                    }
+                    Err(e) => ExecResult::Fault(format!("Load failed: {}", e)),
+                }
+            }
             Node::DrawText(text_n, x_n, y_n, size_n, color_n) => {
                 let text_val = self.evaluate_inner(text_n);
                 let x_val = self.evaluate_inner(x_n);

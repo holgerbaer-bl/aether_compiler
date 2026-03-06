@@ -42,6 +42,17 @@ impl Validator {
                 }
                 self.check_node(val);
             }
+            Node::Store { key, value } => {
+                if key.is_empty() {
+                    self.errors.push("Store: Key cannot be empty".to_string());
+                }
+                self.check_node(value);
+            }
+            Node::Load { key } => {
+                if key.is_empty() {
+                    self.errors.push("Load: Key cannot be empty".to_string());
+                }
+            }
             Node::Add(l, r)
             | Node::Sub(l, r)
             | Node::Mul(l, r)

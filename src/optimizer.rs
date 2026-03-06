@@ -14,6 +14,7 @@ pub fn count_nodes(node: &Node) -> usize {
         | Node::InitAudio
         | Node::GetLastKeypress
         | Node::MapCreate
+        | Node::Load { .. }
         | Node::Import(_) => {}
 
         Node::Add(l, r)
@@ -41,6 +42,7 @@ pub fn count_nodes(node: &Node) -> usize {
         }
 
         Node::Assign(_, val)
+        | Node::Store { value: val, .. }
         | Node::ArrayLen(val)
         | Node::Print(val)
         | Node::EvalJSONNative(val)
@@ -244,6 +246,11 @@ pub fn optimize(node: Node) -> Node {
         },
 
         Node::Assign(name, val) => Node::Assign(name, Box::new(optimize(*val))),
+        Node::Store { key, value } => Node::Store {
+            key,
+            value: Box::new(optimize(*value)),
+        },
+        Node::Load { key } => Node::Load { key },
         Node::ArrayCreate(nodes) => Node::ArrayCreate(nodes.into_iter().map(optimize).collect()),
         Node::ArrayGet(arr, index) => {
             Node::ArrayGet(Box::new(optimize(*arr)), Box::new(optimize(*index)))
