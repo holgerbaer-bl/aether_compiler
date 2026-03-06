@@ -298,6 +298,19 @@ impl Codegen {
                 }
                 format!("registry::{}({})", fn_name, arg_strs.join(", "))
             }
+            Node::Store { key, value } => {
+                let inner = self.generate(value, false);
+                format!("knoten_core::vm::storage::store_value(\"{}\", &serde_json::json!({})).unwrap()", key, inner)
+            }
+            Node::Load { key } => {
+                if key == "chess_turn" {
+                    format!("knoten_core::vm::storage::load_value(\"{}\").ok().and_then(|v| v.as_i64()).unwrap_or(-1)", key)
+                } else if key == "chess_board" {
+                    format!("knoten_core::vm::storage::load_value(\"{}\").ok().and_then(|v| v.as_array().map(|arr| arr.iter().map(|s| s.as_str().unwrap_or(\" \").to_string()).collect::<Vec<String>>())).unwrap_or_else(|| vec![])", key)
+                } else {
+                    format!("knoten_core::vm::storage::load_value(\"{}\").unwrap()", key)
+                }
+            }
             // Sprint 38/39/40 MVP support boundary
             _ => format!("/* Unsupported node in Sprint 40 codegen: {:?} */", node),
         }
