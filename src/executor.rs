@@ -161,6 +161,14 @@ pub struct VoxelInstance {
     pub instance_pos_and_id: [f32; 4],
 }
 
+// Sprint 71: Hardware Instancing Data
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct InstanceData {
+    pub transform: [[f32; 4]; 4],    // 64 bytes
+    pub color_offset: [f32; 4],      // 16 bytes
+    pub material_pbr: [f32; 4],      // 16 bytes (metal, rough, tex, norm)
+}
 #[derive(Clone, Copy, Debug)]
 pub struct PointLightData {
     pub x: f32,
@@ -182,11 +190,11 @@ pub struct PointLightStruct {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct MeshUniforms {
-    pub view_proj: [[f32; 4]; 4],
-    pub material: [f32; 4],
-    pub pbr: [f32; 4],
-    pub camera_pos: [f32; 4],
-    pub lights: [PointLightStruct; 4],
+    pub view_proj: [[f32; 4]; 4],      // 64 bytes
+    pub material: [f32; 4],           // RGBA 16 bytes
+    pub pbr: [f32; 4],                // metallic, roughness, texture_id, normal_map_id 16 bytes
+    pub camera_pos: [f32; 4],         // xyz, pad 16 bytes
+    pub lights: [PointLightStruct; 4], // 32 * 4 = 128 bytes
 }
 
 pub struct ExecutionEngine {
@@ -249,6 +257,11 @@ pub struct ExecutionEngine {
     )>,
     pub point_lights: Vec<PointLightData>,
 
+    // Sprint 71: Instancing state
+    pub instance_queues: HashMap<i64, Vec<InstanceData>>, // Mesh ID -> Instances
+    pub mouse_grab_enabled: bool,
+    pub mouse_delta: (f32, f32),
+
     // UI & Text state
     pub glyph_brush: Option<wgpu_glyph::GlyphBrush<()>>,
     pub staging_belt: Option<wgpu::util::StagingBelt>,
@@ -288,9 +301,19 @@ pub struct ExecutionEngine {
     pub camera3d_view_proj: Option<[[f32; 4]; 4]>, // Cached MVP (view * proj)
     pub canvas_material: [f32; 8],                 // [r,g,b,a, metallic,roughness, pad,pad]
     pub sprite2d_queue: Vec<(i64, f32, f32, f32, f32)>, // (tex_id, x, y, rotation, scale)
+
+    // Bugfix: Shared frame state to prevent flickering and fighting for the frame
+    pub current_canvas_frame: Option<wgpu::SurfaceTexture>,
+    pub current_canvas_view: Option<wgpu::TextureView>,
     pub transform2d_stack: Vec<[f32; 4]>,           // pushed (x,y,rot,scale) transforms
     pub current_canvas_frame: Option<wgpu::SurfaceTexture>,
     pub current_canvas_view: Option<wgpu::TextureView>,
+    pub default_sampler: Option<wgpu::Sampler>,
+
+    // Sprint 71: Weapon View-Model
+    pub weapon_mesh: Option<i64>,
+    pub weapon_tex: Option<i64>,
+    pub weapon_sway: (f32, f32), // Current sway offset
 }
 
 // Sprint 63: Thread-safe actions
@@ -351,7 +374,7 @@ impl ExecutionEngine {
             voxel_ubo: None,
             voxel_map: HashMap::new(),
             voxel_map_active: false,
-            voxel_map_dirty: true,
+            voxel_map_dirty: false,
             interaction_enabled: false,
             physics_enabled: false,
             velocity_y: 0.0,
@@ -359,6 +382,9 @@ impl ExecutionEngine {
             voxel_instance_buffer: None,
             meshes: Vec::new(),
             textures: Vec::new(),
+            instance_queues: HashMap::new(),
+            mouse_grab_enabled: false,
+            mouse_delta: (0.0, 0.0),
             glyph_brush: None,
             staging_belt: None,
             keyboard_buffer: Arc::new(Mutex::new(String::new())),
@@ -372,19 +398,27 @@ impl ExecutionEngine {
             audio_stream: None,
             audio_stream_handle: None,
             samples: HashMap::new(),
-            async_bridge: Some(crate::async_bridge::AsyncBridge::new()),
+            async_bridge: None,
             action_tx: None,
             action_rx: None,
             permission_fault: None,
             ui_dirty: false,
             permissions: AgentPermissions::default(),
-            call_stack: Vec::new(),
+            call_stack: vec![StackFrame {
+                locals: HashMap::new(),
+            }],
             render_canvas_active: false,
             canvas_mesh_pipeline: None,
             camera3d_view_proj: None,
             canvas_material: [1.0, 1.0, 1.0, 1.0, 0.0, 0.5, 0.0, 0.0],
             sprite2d_queue: Vec::new(),
-            transform2d_stack: Vec::new(),
+            point_lights: Vec::new(),
+            weapon_mesh: None,
+            weapon_tex: None,
+            weapon_sway: (0.0, 0.0),
+            startup_time: std::time::Instant::now(),
+            default_texture_view: None,
+            default_sampler: None,
             bridge: Box::new(CoreBridge),
         };
 
@@ -420,19 +454,48 @@ impl ExecutionEngine {
             source: wgpu::ShaderSource::Wgsl(include_str!("../assets/mesh3d.wgsl").into()),
         });
 
-        // UBO layout: 16 f32 (view-proj) + 8 f32 (material) = 24 × 4 = 96 bytes
+        // UBO layout: 16 f32 (view-proj) + 4 f32 (material) + 4 f32 (pbr) + 4 * 8 f32 (lights) = 224 bytes
         let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Mesh3D BGL"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
                 },
-                count: None,
-            }],
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                // Sprint 71: Normal Map Texture
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    },
+                    count: None,
+                },
+            ],
         });
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -447,15 +510,33 @@ impl ExecutionEngine {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<VoxelVertex>() as wgpu::BufferAddress,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &[
-                        wgpu::VertexAttribute { offset: 0,  shader_location: 0, format: wgpu::VertexFormat::Float32x3 },
-                        wgpu::VertexAttribute { offset: 12, shader_location: 1, format: wgpu::VertexFormat::Float32x3 },
-                        wgpu::VertexAttribute { offset: 24, shader_location: 2, format: wgpu::VertexFormat::Float32x2 },
-                    ],
-                }],
+                buffers: &[
+                    wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<VoxelVertex>() as wgpu::BufferAddress,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &[
+                            wgpu::VertexAttribute { offset: 0,  shader_location: 0, format: wgpu::VertexFormat::Float32x3 },
+                            wgpu::VertexAttribute { offset: 12, shader_location: 1, format: wgpu::VertexFormat::Float32x3 },
+                            wgpu::VertexAttribute { offset: 24, shader_location: 2, format: wgpu::VertexFormat::Float32x2 },
+                        ],
+                    },
+                    // Sprint 71: Instance Buffer Layout
+                    wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<InstanceData>() as wgpu::BufferAddress,
+                        step_mode: wgpu::VertexStepMode::Instance,
+                        attributes: &[
+                            // mat4x4 transform (cols 0-3)
+                            wgpu::VertexAttribute { offset: 0,  shader_location: 3, format: wgpu::VertexFormat::Float32x4 },
+                            wgpu::VertexAttribute { offset: 16, shader_location: 4, format: wgpu::VertexFormat::Float32x4 },
+                            wgpu::VertexAttribute { offset: 32, shader_location: 5, format: wgpu::VertexFormat::Float32x4 },
+                            wgpu::VertexAttribute { offset: 48, shader_location: 6, format: wgpu::VertexFormat::Float32x4 },
+                            // color_offset
+                            wgpu::VertexAttribute { offset: 64, shader_location: 7, format: wgpu::VertexFormat::Float32x4 },
+                            // material_pbr (metal, rough, tex_id, norm_id)
+                            wgpu::VertexAttribute { offset: 80, shader_location: 8, format: wgpu::VertexFormat::Float32x4 },
+                        ],
+                    },
+                ],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -993,6 +1074,11 @@ impl ExecutionEngine {
                 }
                 fault => fault,
             },
+            Node::Abs(n) => match self.evaluate_inner(n) {
+                ExecResult::Value(RelType::Float(f)) => ExecResult::Value(RelType::Float(f.abs())),
+                ExecResult::Value(RelType::Int(i)) => ExecResult::Value(RelType::Int(i.abs())),
+                fault => fault,
+            },
             Node::Time => {
                 use std::time::{SystemTime, UNIX_EPOCH};
                 let t = SystemTime::now()
@@ -1000,6 +1086,10 @@ impl ExecutionEngine {
                     .unwrap()
                     .as_secs_f64();
                 ExecResult::Value(RelType::Float(t))
+            }
+            Node::GlobalTime => {
+                let millis = self.startup_time.elapsed().as_millis() as f64;
+                ExecResult::Value(RelType::Float(millis))
             }
             Node::Mat4Mul(l, r) => {
                 let lv = self.evaluate_inner(l);
@@ -1427,8 +1517,7 @@ impl ExecutionEngine {
                 });
                 ExecResult::Value(RelType::Void)
             }
-
-            /// Camera3D — computes perspective + view matrix from position/target/fov.
+            // Camera3D — computes perspective + view matrix from position/target/fov.
             Node::Camera3D { pos_x, pos_y, pos_z, target_x, target_y, target_z, fov } => {
                 let ef = |res: ExecResult| -> f32 {
                     match res {
@@ -1468,7 +1557,7 @@ impl ExecutionEngine {
                 ExecResult::Value(RelType::Void)
             }
 
-            /// Mesh3D — uploads geometry + material UBO, issues an indexed draw call.
+            // Mesh3D — uploads geometry + material UBO, issues an indexed draw call.
             Node::Mesh3D { primitive, material } => {
                 // Evaluate material overrides first (if any nested Material3D)
                 let mat_res = self.evaluate_inner(material);
@@ -1503,38 +1592,64 @@ impl ExecutionEngine {
                         (verts, vec![0,1,2, 2,3,0])
                     }
                     _ /* "cube" */ => {
+                        // Bugfix: Proper 24-vertex cube with distinct normals per face to fix lighting/shading
                         let v = 0.5f32;
-                        let faces: [([f32;3],[f32;3]); 8] = [
-                            ([-v,-v,-v],[-0.577,-0.577,-0.577]),
-                            ([-v, v,-v],[-0.577, 0.577,-0.577]),
-                            ([ v, v,-v],[ 0.577, 0.577,-0.577]),
-                            ([ v,-v,-v],[ 0.577,-0.577,-0.577]),
-                            ([-v,-v, v],[-0.577,-0.577, 0.577]),
-                            ([-v, v, v],[-0.577, 0.577, 0.577]),
-                            ([ v, v, v],[ 0.577, 0.577, 0.577]),
-                            ([ v,-v, v],[ 0.577,-0.577, 0.577]),
-                        ];
-                        let verts = faces.iter().map(|(p,n)| VoxelVertex {
-                            position: *p, normal: *n, uv: [0.5,0.5]
-                        }).collect();
-                        let indices = vec![
-                            0,1,2, 2,3,0,
-                            4,5,6, 6,7,4,
-                            0,1,5, 5,4,0,
-                            3,2,6, 6,7,3,
-                            1,2,6, 6,5,1,
-                            0,3,7, 7,4,0,
-                        ];
+                        let mut verts = Vec::with_capacity(24);
+                        let mut indices = Vec::with_capacity(36);
+
+                        // Helper to add a quad (face)
+                        let mut add_face = |p0:[f32;3], p1:[f32;3], p2:[f32;3], p3:[f32;3], n:[f32;3]| {
+                            let start = verts.len() as u32;
+                            verts.push(VoxelVertex { position: p0, normal: n, uv: [0.0,0.0] });
+                            verts.push(VoxelVertex { position: p1, normal: n, uv: [1.0,0.0] });
+                            verts.push(VoxelVertex { position: p2, normal: n, uv: [1.0,1.0] });
+                            verts.push(VoxelVertex { position: p3, normal: n, uv: [0.0,1.0] });
+                            indices.extend_from_slice(&[start, start+1, start+2, start, start+2, start+3]);
+                        };
+
+                        // +Z (front)
+                        add_face([-v,-v, v], [ v,-v, v], [ v, v, v], [-v, v, v], [0.0,0.0,1.0]);
+                        // -Z (back)
+                        add_face([ v,-v,-v], [-v,-v,-v], [-v, v,-v], [ v, v,-v], [0.0,0.0,-1.0]);
+                        // +X (right)
+                        add_face([ v,-v, v], [ v,-v,-v], [ v, v,-v], [ v, v, v], [1.0,0.0,0.0]);
+                        // -X (left)
+                        add_face([-v,-v,-v], [-v,-v, v], [-v, v, v], [-v, v,-v], [-1.0,0.0,0.0]);
+                        // +Y (top)
+                        add_face([-v, v, v], [ v, v, v], [ v, v,-v], [-v, v,-v], [0.0,1.0,0.0]);
+                        // -Y (bottom)
+                        add_face([-v,-v,-v], [ v,-v,-v], [ v,-v, v], [-v,-v, v], [0.0,-1.0,0.0]);
+
                         (verts, indices)
                     }
                 };
 
-                // Pack UBO: 16 floats view-proj + 8 floats material
-                let vp = self.camera3d_view_proj.unwrap();
-                let mat = self.canvas_material;
-                let mut ubo_data = [0.0f32; 24];
-                for r in 0..4 { for c in 0..4 { ubo_data[r*4+c] = vp[r][c]; } }
-                ubo_data[16..24].copy_from_slice(&mat);
+                // Pack UBO using MeshUniforms struct
+                let mut uniforms = MeshUniforms {
+                    view_proj: self.camera3d_view_proj.unwrap(),
+                    material: [
+                        self.canvas_material[0],
+                        self.canvas_material[1],
+                        self.canvas_material[2],
+                        self.canvas_material[3],
+                    ],
+                    pbr: [
+                        self.canvas_material[4], // metallic
+                        self.canvas_material[5], // roughness
+                        self.canvas_material[6], // texture_id (stored in material[6] for now)
+                        0.0,
+                    ],
+                    camera_pos: [self.camera_pos[0], self.camera_pos[1], self.camera_pos[2], 1.0],
+                    lights: [PointLightStruct { pos: [0.0; 4], color: [0.0;4] }; 4],
+                };
+
+                // Fill lights
+                for (i, source) in self.point_lights.iter().take(4).enumerate() {
+                    uniforms.lights[i] = PointLightStruct {
+                        pos: [source.x, source.y, source.z, 1.0],
+                        color: [source.r, source.g, source.b, source.intensity],
+                    };
+                }
 
                 let device = self.device.as_ref().unwrap();
                 let vbo = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -1546,35 +1661,50 @@ impl ExecutionEngine {
                     usage: wgpu::BufferUsages::INDEX,
                 });
                 let ubo = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Mesh3D UBO"), contents: bytemuck::cast_slice(&ubo_data),
+                    label: Some("Mesh3D UBO"), contents: bytemuck::cast_slice(&[uniforms]),
                     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 });
 
                 let bgl = self.canvas_mesh_pipeline.as_ref().unwrap().get_bind_group_layout(0);
+                
+                // Pick texture/sampler
+                let tex_id = self.canvas_material[6] as i64; // 0=none, 1=index 0, etc.
+                let (tex_view, sampler) = if tex_id > 0 && (tex_id-1) < self.textures.len() as i64 {
+                    let (_, view, _, _) = &self.textures[(tex_id-1) as usize];
+                    // We need a sampler! LoadTexture creates one but doesn't store it in the tuple.
+                    // Wait, LoadTexture DOES create a sampler but only uses it for its internal bind_group.
+                    // I'll use the default_sampler for now or update LoadTexture to store the sampler.
+                    (view, self.default_sampler.as_ref().unwrap())
+                } else {
+                    (self.default_texture_view.as_ref().unwrap(), self.default_sampler.as_ref().unwrap())
+                };
+
                 let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
                     layout: &bgl,
-                    entries: &[wgpu::BindGroupEntry { binding:0, resource: ubo.as_entire_binding() }],
+                    entries: &[
+                        wgpu::BindGroupEntry { binding: 0, resource: ubo.as_entire_binding() },
+                        wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(tex_view) },
+                        wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(sampler) },
+                    ],
                     label: Some("Mesh3D BG"),
                 });
 
-                let surface = match self.surface.as_ref() {
-                    Some(s) => s,
-                    None => return ExecResult::Fault("Mesh3D: no WGPU surface".into()),
+                // Bugfix: Use current_canvas_view instead of acquiring a new frame
+                let fb_view = match self.current_canvas_view.as_ref() {
+                    Some(v) => v,
+                    None => return ExecResult::Fault("Mesh3D: must be used inside RenderCanvas".into()),
                 };
-                let frame = match surface.get_current_texture() {
-                    Ok(f) => f,
-                    Err(e) => return ExecResult::Fault(format!("Mesh3D: surface error {:?}", e)),
-                };
-                let fb_view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+
                 let queue = self.queue.as_ref().unwrap();
                 let mut enc = device.create_command_encoder(
                     &wgpu::CommandEncoderDescriptor { label: Some("Mesh3D enc") }
                 );
                 {
+                    // Bugfix: Use LoadOp::Load and depth attachment to prevent flicker and enable Z-sorting
                     let mut rpass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some("Mesh3D rpass"),
                         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: &fb_view, resolve_target: None,
+                            view: fb_view, resolve_target: None,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store,
                             },
@@ -1583,7 +1713,7 @@ impl ExecutionEngine {
                             wgpu::RenderPassDepthStencilAttachment {
                                 view: dv,
                                 depth_ops: Some(wgpu::Operations {
-                                    load: wgpu::LoadOp::Clear(1.0),
+                                    load: wgpu::LoadOp::Load, // We cleared depth in RenderCanvas
                                     store: wgpu::StoreOp::Store,
                                 }),
                                 stencil_ops: None,
@@ -1595,28 +1725,56 @@ impl ExecutionEngine {
                     rpass.set_pipeline(self.canvas_mesh_pipeline.as_ref().unwrap());
                     rpass.set_bind_group(0, &bg, &[]);
                     rpass.set_vertex_buffer(0, vbo.slice(..));
+                    
+                    // Sprint 71: Provide identity instance for Mesh3D (single draw)
+                    let singleton = [InstanceData {
+                        transform: [
+                            [1.0, 0.0, 0.0, 0.0],
+                            [0.0, 1.0, 0.0, 0.0],
+                            [0.0, 0.0, 1.0, 0.0],
+                            [0.0, 0.0, 0.0, 1.0],
+                        ],
+                        color_offset: [1.0; 4],
+                        material_pbr: [
+                            self.canvas_material[4],
+                            self.canvas_material[5],
+                            self.canvas_material[6],
+                            self.canvas_material[7], // normal_map_id
+                        ],
+                    }];
+                    let inst_vbo = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Mesh3D Singleton Inst"),
+                        contents: bytemuck::cast_slice(&singleton),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
+                    rpass.set_vertex_buffer(1, inst_vbo.slice(..));
+
                     rpass.set_index_buffer(ibo.slice(..), wgpu::IndexFormat::Uint32);
                     rpass.draw_indexed(0..indices.len() as u32, 0, 0..1);
                 }
                 queue.submit(std::iter::once(enc.finish()));
-                frame.present();
                 ExecResult::Value(RelType::Void)
             }
 
-            /// RenderCanvas — activates the 3D canvas mode, evaluates the scene body.
+            // RenderCanvas — activates the 3D canvas mode, evaluates the scene body.
             Node::RenderCanvas { body } => {
+                // Bugfix: Shared frame is now managed by PollEvents to prevent flickering
+                if self.current_canvas_view.is_none() {
+                    return ExecResult::Fault("RenderCanvas: requires active PollEvents for frame management".into());
+                }
+
                 self.render_canvas_active = true;
                 self.sprite2d_queue.clear();
-                
-                // Sprint 70: If we have a shared frame/view from about_to_wait, we use it.
-                // Otherwise this node is a NOP for rendering (it just sets the active flag).
+                self.instance_queues.clear(); // Sprint 71: Clear instances at start of frame
+                self.point_lights.clear();    // Sprint 69: Clear lights at start of frame
                 
                 let result = self.evaluate_inner(body);
+                
                 self.render_canvas_active = false;
                 result
             }
 
-            /// Transform2D — pushes a spatial context for Sprite2D children.
+            // Transform2D — pushes a spatial context for Sprite2D children.
             Node::Transform2D { x, y, rotation, scale, body } => {
                 let ef = |res: ExecResult| -> f32 {
                     match res {
@@ -1635,7 +1793,7 @@ impl ExecutionEngine {
                 result
             }
 
-            /// Sprite2D — enqueues a sprite draw (flushed by RenderCanvas frame).
+            // Sprite2D — enqueues a sprite draw (flushed by RenderCanvas frame).
             Node::Sprite2D { texture_id, transform: _ } => {
                 let tid = match self.evaluate_inner(texture_id) {
                     ExecResult::Value(RelType::Int(i)) => i,
@@ -1647,6 +1805,111 @@ impl ExecutionEngine {
                     .unwrap_or((0.0, 0.0, 0.0, 1.0));
                 self.sprite2d_queue.push((tid, x, y, rot, sc));
                 ExecResult::Value(RelType::Void)
+            }
+
+            // Sprint 71: PS3 Tech-Base
+            Node::MeshInstance3D { mesh_id, transform, color_offset, pbr } => {
+                let id_val = self.evaluate_inner(mesh_id);
+                let trans_val = self.evaluate_inner(transform);
+                let color_val = self.evaluate_inner(color_offset);
+                let pbr_val = self.evaluate_inner(pbr);
+
+                if let (
+                    ExecResult::Value(RelType::Int(id)),
+                    ExecResult::Value(RelType::Array(trans_arr)),
+                    ExecResult::Value(RelType::Array(color_arr)),
+                    ExecResult::Value(RelType::Array(pbr_arr)),
+                ) = (id_val, trans_val, color_val, pbr_val)
+                {
+                    let mut mat = [[0.0f32; 4]; 4];
+                    for i in 0..16 {
+                        let row = i / 4;
+                        let col = i % 4;
+                        if i < trans_arr.len() {
+                            if let RelType::Float(f) = trans_arr[i] { mat[row][col] = f as f32; }
+                            else if let RelType::Int(v) = trans_arr[i] { mat[row][col] = v as f32; }
+                        }
+                    }
+
+                    let mut color = [1.0f32; 4];
+                    for i in 0..4 {
+                        if i < color_arr.len() {
+                            if let RelType::Float(f) = color_arr[i] { color[i] = f as f32; }
+                            else if let RelType::Int(v) = color_arr[i] { color[i] = v as f32; }
+                        }
+                    }
+
+                    let mut pbr_data = [0.0f32; 4];
+                    for i in 0..4 {
+                        if i < pbr_arr.len() {
+                            if let RelType::Float(f) = pbr_arr[i] { pbr_data[i] = f as f32; }
+                            else if let RelType::Int(v) = pbr_arr[i] { pbr_data[i] = v as f32; }
+                        }
+                    }
+
+                    let queue = self.instance_queues.entry(id as i64).or_insert_with(Vec::new);
+                    queue.push(InstanceData {
+                        transform: mat,
+                        color_offset: color,
+                        material_pbr: pbr_data,
+                    });
+                    ExecResult::Value(RelType::Void)
+                } else {
+                    ExecResult::Fault("MeshInstance3D expects (Int, Array, Array, Array)".to_string())
+                }
+            }
+
+            Node::FPSCamera { fov } => {
+                if let ExecResult::Value(RelType::Float(fv)) = self.evaluate_inner(fov) {
+                    self.camera_active = true;
+                    self.camera_fov = fv as f32;
+                    ExecResult::Value(RelType::Void)
+                } else if let ExecResult::Value(RelType::Int(iv)) = self.evaluate_inner(fov) {
+                    self.camera_active = true;
+                    self.camera_fov = iv as f32;
+                    ExecResult::Value(RelType::Void)
+                } else {
+                    ExecResult::Fault("FPSCamera expects Float/Int fov".to_string())
+                }
+            }
+
+            Node::MouseGrab { enabled } => {
+                if let ExecResult::Value(RelType::Bool(en)) = self.evaluate_inner(enabled) {
+                    self.mouse_grab_enabled = en;
+                    ExecResult::Value(RelType::Void)
+                } else {
+                    ExecResult::Fault("MouseGrab expects Bool".to_string())
+                }
+            }
+
+            Node::RaycastSimple => {
+                let yaw = self.camera_yaw;
+                let pitch = self.camera_pitch;
+                let (sy, cy) = yaw.sin_cos();
+                let (sp, cp) = pitch.sin_cos();
+                use cgmath::InnerSpace;
+                let forward = cgmath::Vector3::new(sy * cp, sp, cy * cp).normalize();
+                let origin = cgmath::Point3::new(self.camera_pos[0], self.camera_pos[1], self.camera_pos[2]);
+
+                if let Some((hit, _)) = self.raycast_voxels(origin, forward, 10.0) {
+                    let hit_pt = cgmath::Point3::new(hit[0] as f32, hit[1] as f32, hit[2] as f32);
+                    let dist = (hit_pt - origin).magnitude();
+                    ExecResult::Value(RelType::Float(dist as f64))
+                } else {
+                    ExecResult::Value(RelType::Float(-1.0))
+                }
+            }
+
+            Node::WeaponViewModel { mesh, tex } => {
+                let m_val = self.evaluate_inner(mesh);
+                let t_val = self.evaluate_inner(tex);
+                if let (ExecResult::Value(RelType::Int(m)), ExecResult::Value(RelType::Int(t))) = (m_val, t_val) {
+                    self.weapon_mesh = Some(m);
+                    self.weapon_tex = Some(t);
+                    ExecResult::Value(RelType::Void)
+                } else {
+                    ExecResult::Fault("WeaponViewModel expects (Int, Int)".to_string())
+                }
             }
 
             Node::Lt(l, r) => {
@@ -2431,6 +2694,42 @@ impl ExecutionEngine {
                     self.device = Some(device);
                     self.queue = Some(queue);
                     self.config = Some(config);
+
+                    // Sprint 70: Default white texture (1x1)
+                    let white_tex = self.device.as_ref().unwrap().create_texture(&wgpu::TextureDescriptor {
+                        label: Some("Default White Texture"),
+                        size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                        view_formats: &[],
+                    });
+                    self.queue.as_ref().unwrap().write_texture(
+                        wgpu::ImageCopyTexture {
+                            texture: &white_tex,
+                            mip_level: 0,
+                            origin: wgpu::Origin3d::ZERO,
+                            aspect: wgpu::TextureAspect::All,
+                        },
+                        &[255, 255, 255, 255],
+                        wgpu::ImageDataLayout {
+                            offset: 0,
+                            bytes_per_row: Some(4),
+                            rows_per_image: Some(1),
+                        },
+                        wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+                    );
+                    self.default_texture_view = Some(white_tex.create_view(&wgpu::TextureViewDescriptor::default()));
+                    self.default_sampler = Some(self.device.as_ref().unwrap().create_sampler(&wgpu::SamplerDescriptor {
+                        address_mode_u: wgpu::AddressMode::Repeat,
+                        address_mode_v: wgpu::AddressMode::Repeat,
+                        mag_filter: wgpu::FilterMode::Linear,
+                        min_filter: wgpu::FilterMode::Linear,
+                        ..Default::default()
+                    }));
+
                     ExecResult::Value(RelType::Void)
                 } else {
                     ExecResult::Fault("InitGraphics requires InitWindow first".to_string())
@@ -2551,51 +2850,53 @@ impl ExecutionEngine {
                                 }));
                         }
 
+                        // Bugfix: Use centralized view if in PollEvents
+                        if let Some(view) = self.current_canvas_view.as_ref() {
+                            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("DrawRect Enc") });
+                            {
+                                let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                    label: Some("DrawRect Pass"),
+                                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                        view, resolve_target: None,
+                                        ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                                    })],
+                                    depth_stencil_attachment: None,
+                                    timestamp_writes: None, occlusion_query_set: None,
+                                });
+                                rpass.set_pipeline(pipeline);
+                                if let Some(bg) = &active_bind_group { rpass.set_bind_group(0, bg, &[]); }
+                                rpass.draw(0..36, 0..1);
+                            }
+                            queue.submit(std::iter::once(encoder.finish()));
+                            return ExecResult::Value(RelType::Void);
+                        }
+
                         match surface.get_current_texture() {
                             Ok(frame) => {
-                                let view = frame
-                                    .texture
-                                    .create_view(&wgpu::TextureViewDescriptor::default());
-                                let mut encoder = device.create_command_encoder(
-                                    &wgpu::CommandEncoderDescriptor::default(),
-                                );
+                                let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+                                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
                                 {
-                                    let mut rpass =
-                                        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                            label: Some("Render Pass"),
-                                            color_attachments: &[Some(
-                                                wgpu::RenderPassColorAttachment {
-                                                    view: &view,
-                                                    resolve_target: None,
-                                                    ops: wgpu::Operations {
-                                                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                                                            r: 0.1,
-                                                            g: 0.2,
-                                                            b: 0.3,
-                                                            a: 1.0,
-                                                        }),
-                                                        store: wgpu::StoreOp::Store,
-                                                    },
-                                                },
-                                            )],
-                                            depth_stencil_attachment: None,
-                                            timestamp_writes: None,
-                                            occlusion_query_set: None,
-                                        });
+                                    let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                        label: Some("DrawRect Render Pass"),
+                                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                            view: &view, resolve_target: None,
+                                            ops: wgpu::Operations {
+                                                load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.1, g: 0.2, b: 0.3, a: 1.0 }),
+                                                store: wgpu::StoreOp::Store,
+                                            },
+                                        })],
+                                        depth_stencil_attachment: None,
+                                        timestamp_writes: None, occlusion_query_set: None,
+                                    });
                                     rpass.set_pipeline(pipeline);
-                                    if let Some(bg) = &active_bind_group {
-                                        rpass.set_bind_group(0, bg, &[]);
-                                    }
-                                    rpass.draw(0..36, 0..1); // 36 vertices handles cubes natively!
+                                    if let Some(bg) = &active_bind_group { rpass.set_bind_group(0, bg, &[]); }
+                                    rpass.draw(0..36, 0..1);
                                 }
                                 queue.submit(Some(encoder.finish()));
                                 frame.present();
                                 ExecResult::Value(RelType::Void)
                             }
-                            Err(e) => ExecResult::Fault(format!(
-                                "RenderMesh failed to acquire frame: {:?}",
-                                e
-                            )),
+                            Err(e) => ExecResult::Fault(format!("DrawRect failed: {:?}", e)),
                         }
                     } else {
                         ExecResult::Fault("Graphics context not initialized".to_string())
@@ -3065,48 +3366,35 @@ impl ExecutionEngine {
                             ..wgpu_glyph::Section::default()
                         });
 
+                        // Bugfix: Use centralized view if in PollEvents
+                        if let Some(view) = self.current_canvas_view.as_ref() {
+                            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("DrawText Enc") });
+                            glyph_brush.draw_queued(device, staging_belt, &mut encoder, view, config.width, config.height).unwrap();
+                            staging_belt.finish();
+                            queue.submit(std::iter::once(encoder.finish()));
+                            staging_belt.recall();
+                            return ExecResult::Value(RelType::Void);
+                        }
+
                         match surface.get_current_texture() {
                             Ok(frame) => {
-                                let view = frame
-                                    .texture
-                                    .create_view(&wgpu::TextureViewDescriptor::default());
-                                let mut encoder = device.create_command_encoder(
-                                    &wgpu::CommandEncoderDescriptor::default(),
-                                );
+                                let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+                                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
                                 {
-                                    let _rpass =
-                                        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                            label: Some("DrawText Pass"),
-                                            color_attachments: &[Some(
-                                                wgpu::RenderPassColorAttachment {
-                                                    view: &view,
-                                                    resolve_target: None,
-                                                    ops: wgpu::Operations {
-                                                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                                                            r: 0.1,
-                                                            g: 0.1,
-                                                            b: 0.1,
-                                                            a: 1.0,
-                                                        }),
-                                                        store: wgpu::StoreOp::Store,
-                                                    },
-                                                },
-                                            )],
-                                            depth_stencil_attachment: None,
-                                            timestamp_writes: None,
-                                            occlusion_query_set: None,
-                                        });
+                                    let _rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                        label: Some("DrawText Pass"),
+                                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                            view: &view, resolve_target: None,
+                                            ops: wgpu::Operations {
+                                                load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.1, g: 0.1, b: 0.1, a: 1.0 }),
+                                                store: wgpu::StoreOp::Store,
+                                            },
+                                        })],
+                                        depth_stencil_attachment: None,
+                                        timestamp_writes: None, occlusion_query_set: None,
+                                    });
                                 }
-                                glyph_brush
-                                    .draw_queued(
-                                        device,
-                                        staging_belt,
-                                        &mut encoder,
-                                        &view,
-                                        config.width,
-                                        config.height,
-                                    )
-                                    .unwrap();
+                                glyph_brush.draw_queued(device, staging_belt, &mut encoder, &view, config.width, config.height).unwrap();
                                 staging_belt.finish();
                                 queue.submit(Some(encoder.finish()));
                                 frame.present();
@@ -3297,54 +3585,52 @@ impl ExecutionEngine {
                                 }));
                         }
 
+                        // Bugfix: Use centralized view if in PollEvents
+                        if let Some(view) = self.current_canvas_view.as_ref() {
+                            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("RenderAsset Enc") });
+                            {
+                                let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                    label: Some("Asset Pass"),
+                                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                        view, resolve_target: None,
+                                        ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                                    })],
+                                    depth_stencil_attachment: None,
+                                    timestamp_writes: None, occlusion_query_set: None,
+                                });
+                                rpass.set_pipeline(&pipeline);
+                                rpass.set_vertex_buffer(0, mesh.vbo.slice(..));
+                                rpass.set_index_buffer(mesh.ibo.slice(..), wgpu::IndexFormat::Uint32);
+                                if let Some(bg) = &active_bind_group { rpass.set_bind_group(0, bg, &[]); }
+                                rpass.set_bind_group(1, &texture_bind.2, &[]);
+                                rpass.draw_indexed(0..mesh.index_count, 0, 0..1);
+                            }
+                            queue.submit(std::iter::once(encoder.finish()));
+                            return ExecResult::Value(RelType::Void);
+                        }
+
                         match surface.get_current_texture() {
                             Ok(frame) => {
-                                let view = frame
-                                    .texture
-                                    .create_view(&wgpu::TextureViewDescriptor::default());
-                                let mut encoder = device.create_command_encoder(
-                                    &wgpu::CommandEncoderDescriptor::default(),
-                                );
+                                let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+                                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
                                 {
-                                    let mut rpass =
-                                        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                                            label: Some("Render Pass"),
-                                            color_attachments: &[Some(
-                                                wgpu::RenderPassColorAttachment {
-                                                    view: &view,
-                                                    resolve_target: None,
-                                                    ops: wgpu::Operations {
-                                                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                                                            r: 0.1,
-                                                            g: 0.2,
-                                                            b: 0.3,
-                                                            a: 1.0,
-                                                        }),
-                                                        store: wgpu::StoreOp::Store,
-                                                    },
-                                                },
-                                            )],
-                                            depth_stencil_attachment: None,
-                                            timestamp_writes: None,
-                                            occlusion_query_set: None,
-                                        });
+                                    let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                        label: Some("Render Pass"),
+                                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                            view: &view, resolve_target: None,
+                                            ops: wgpu::Operations {
+                                                load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.1, g: 0.2, b: 0.3, a: 1.0 }),
+                                                store: wgpu::StoreOp::Store,
+                                            },
+                                        })],
+                                        depth_stencil_attachment: None,
+                                        timestamp_writes: None, occlusion_query_set: None,
+                                    });
                                     rpass.set_pipeline(&pipeline);
-
-                                    // Bind VBO & IBO
                                     rpass.set_vertex_buffer(0, mesh.vbo.slice(..));
-                                    rpass.set_index_buffer(
-                                        mesh.ibo.slice(..),
-                                        wgpu::IndexFormat::Uint32,
-                                    );
-
-                                    // Bind Uniforms
-                                    if let Some(bg) = &active_bind_group {
-                                        rpass.set_bind_group(0, bg, &[]);
-                                    }
-
-                                    // Bind Texture (Group 1)
+                                    rpass.set_index_buffer(mesh.ibo.slice(..), wgpu::IndexFormat::Uint32);
+                                    if let Some(bg) = &active_bind_group { rpass.set_bind_group(0, bg, &[]); }
                                     rpass.set_bind_group(1, &texture_bind.2, &[]);
-
                                     rpass.draw_indexed(0..mesh.index_count, 0, 0..1);
                                 }
                                 queue.submit(Some(encoder.finish()));
@@ -3521,7 +3807,24 @@ impl ExecutionEngine {
                                         }
                                     }
                                 }
+                                WindowEvent::KeyboardInput { event, .. } => {
+                                    if let winit::keyboard::PhysicalKey::Code(code) = event.physical_key {
+                                        let is_pressed = event.state == winit::event::ElementState::Pressed;
+                                        match code {
+                                            winit::keyboard::KeyCode::KeyW => self.engine.input_w = is_pressed,
+                                            winit::keyboard::KeyCode::KeyA => self.engine.input_a = is_pressed,
+                                            winit::keyboard::KeyCode::KeyS => self.engine.input_s = is_pressed,
+                                            winit::keyboard::KeyCode::KeyD => self.engine.input_d = is_pressed,
+                                            winit::keyboard::KeyCode::Space => self.engine.input_space = is_pressed,
+                                            winit::keyboard::KeyCode::ShiftLeft => self.engine.input_shift = is_pressed,
+                                            _ => {}
+                                        }
+                                    }
+                                }
                                 _ => {}
+                            }
+                        }
+
                             }
                         }
 
@@ -3531,7 +3834,25 @@ impl ExecutionEngine {
                             _device_id: winit::event::DeviceId,
                             event: winit::event::DeviceEvent,
                         ) {
-                            if self.engine.camera_active
+                            if self.engine.mouse_grab_enabled {
+                                if let winit::event::DeviceEvent::MouseMotion { delta } = event {
+                                    self.engine.mouse_delta.0 += delta.0 as f32;
+                                    self.engine.mouse_delta.1 += delta.1 as f32;
+                                    
+                                    // Also update camera directly if camera_active is true (Legacy support)
+                                    if self.engine.camera_active {
+                                        self.engine.camera_yaw += delta.0 as f32 * 0.002;
+                                        self.engine.camera_pitch -= delta.1 as f32 * 0.002;
+
+                                        let limit = std::f32::consts::FRAC_PI_2 - 0.01;
+                                        if self.engine.camera_pitch > limit {
+                                            self.engine.camera_pitch = limit;
+                                        } else if self.engine.camera_pitch < -limit {
+                                            self.engine.camera_pitch = -limit;
+                                        }
+                                    }
+                                }
+                            } else if self.engine.camera_active
                                 && let winit::event::DeviceEvent::MouseMotion { delta } = event
                             {
                                 self.engine.camera_yaw += delta.0 as f32 * 0.002;
@@ -3715,6 +4036,60 @@ impl ExecutionEngine {
                                 ctx.begin_pass(raw_input);
                             }
 
+                            // Sprint 71: Handle Mouse Grab and Clear Instance Queues
+                            if let Some(window) = &self.engine.window {
+                                if self.engine.mouse_grab_enabled {
+                                    let _ = window.set_cursor_grab(winit::window::CursorGrabMode::Locked);
+                                    window.set_cursor_visible(false);
+                                } else {
+                                    let _ = window.set_cursor_grab(winit::window::CursorGrabMode::None);
+                                    window.set_cursor_visible(true);
+                                }
+                            }
+                            self.engine.instance_queues.clear();
+                            self.engine.mouse_delta = (0.0, 0.0);
+
+                            // Bugfix: Centralized Frame Acquisition to prevent flickering
+                            if let (Some(surface), Some(device), Some(_config)) = 
+                                (&self.engine.surface, &self.engine.device, &self.engine.config) 
+                            {
+                                if let Ok(frame) = surface.get_current_texture() {
+                                    let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
+                                    
+                                    // Initial Clear for the whole frame (Color + Depth)
+                                    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("Frame Initial Clear") });
+                                    {
+                                        let _rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                            label: Some("Initial Clear Pass"),
+                                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                                view: &view, resolve_target: None,
+                                                ops: wgpu::Operations {
+                                                    load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.05, g: 0.05, b: 0.08, a: 1.0 }),
+                                                    store: wgpu::StoreOp::Store,
+                                                },
+                                            })],
+                                            depth_stencil_attachment: self.engine.depth_texture_view.as_ref().map(|dv|
+                                                wgpu::RenderPassDepthStencilAttachment {
+                                                    view: dv,
+                                                    depth_ops: Some(wgpu::Operations {
+                                                        load: wgpu::LoadOp::Clear(1.0),
+                                                        store: wgpu::StoreOp::Store,
+                                                    }),
+                                                    stencil_ops: None,
+                                                }
+                                            ),
+                                            timestamp_writes: None, occlusion_query_set: None,
+                                        });
+                                    }
+                                    if let Some(queue) = &self.engine.queue {
+                                        queue.submit(std::iter::once(encoder.finish()));
+                                    }
+
+                                    self.engine.current_canvas_frame = Some(frame);
+                                    self.engine.current_canvas_view = Some(view);
+                                }
+                            }
+
                             let res = self.engine.evaluate(self.body);
 
                             let has_voxels = self.engine.camera_active
@@ -3730,7 +4105,7 @@ impl ExecutionEngine {
                                 Some(renderer),
                                 Some(device),
                                 Some(queue),
-                                Some(surface),
+                                Some(_surface),
                                 Some(window),
                                 Some(config),
                                 depth_view_opt,
@@ -3769,8 +4144,10 @@ impl ExecutionEngine {
                                     
                                     // Sprint 70: Store for shared use across nodes
                                     self.engine.current_canvas_frame = Some(frame);
-                                    self.engine.current_canvas_view = Some(view);
-
+                                    self.engine.current_canvas_view = Some(view.clone());
+                                    
+                                    // Make view available locally for this loop too
+                                    let view = view;
                                     let mut encoder = device.create_command_encoder(
                                         &wgpu::CommandEncoderDescriptor::default(),
                                     );
@@ -3885,14 +4262,7 @@ impl ExecutionEngine {
                                                             view: &view,
                                                             resolve_target: None,
                                                             ops: wgpu::Operations {
-                                                                load: wgpu::LoadOp::Clear(
-                                                                    wgpu::Color {
-                                                                        r: 0.5,
-                                                                        g: 0.8,
-                                                                        b: 1.0,
-                                                                        a: 1.0,
-                                                                    },
-                                                                ),
+                                                                load: wgpu::LoadOp::Load,
                                                                 store: wgpu::StoreOp::Store,
                                                             },
                                                         },
@@ -3901,7 +4271,7 @@ impl ExecutionEngine {
                                                         wgpu::RenderPassDepthStencilAttachment {
                                                             view: depth_view,
                                                             depth_ops: Some(wgpu::Operations {
-                                                                load: wgpu::LoadOp::Clear(1.0),
+                                                                load: wgpu::LoadOp::Load,
                                                                 store: wgpu::StoreOp::Store,
                                                             }),
                                                             stencil_ops: None,
@@ -3928,6 +4298,190 @@ impl ExecutionEngine {
                                         }
                                     }
 
+                                        }
+                                    }
+
+                                    // Sprint 71: Flush Hardware Instancing Queues
+                                    for (&mesh_id, instances) in &self.engine.instance_queues {
+                                        if instances.is_empty() { continue; }
+                                        let mesh_idx = mesh_id as usize;
+                                        if mesh_idx >= self.engine.meshes.len() { continue; }
+
+                                        self.engine.ensure_canvas_mesh_pipeline();
+                                        if let (Some(pipeline), Some(device), Some(view_proj)) = (
+                                            &self.engine.canvas_mesh_pipeline,
+                                            &self.engine.device,
+                                            self.engine.camera3d_view_proj
+                                        ) {
+                                            // Create instance buffer
+                                            let instance_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                                label: Some("Instancing VB"),
+                                                contents: bytemuck::cast_slice(instances),
+                                                usage: wgpu::BufferUsages::VERTEX,
+                                            });
+
+                                            // Setup uniforms for this mesh
+                                            // Note: In a full engine we'd optimize this with a single pass, but for now
+                                            // we reuse the Mesh3D logic with an instanced draw call.
+                                            let mesh = &self.engine.meshes[mesh_idx];
+                                            
+                                            // Pick default texture/sampler or first available
+                                            let tex_view = self.engine.default_texture_view.as_ref().unwrap();
+                                            let sampler = self.engine.default_sampler.as_ref().unwrap();
+
+                                            // Pack UBO (ViewProj + dummy light data)
+                                            let mut uniforms = MeshUniforms {
+                                                view_proj,
+                                                material: [1.0; 4],
+                                                pbr: [0.0, 0.5, 0.0, 0.0],
+                                                camera_pos: [self.engine.camera_pos[0], self.engine.camera_pos[1], self.engine.camera_pos[2], 1.0],
+                                                lights: [PointLightStruct { pos: [0.0; 4], color: [0.0;4] }; 4],
+                                            };
+                                            for (i, source) in self.engine.point_lights.iter().take(4).enumerate() {
+                                                uniforms.lights[i] = PointLightStruct {
+                                                    pos: [source.x, source.y, source.z, 1.0],
+                                                    color: [source.r, source.g, source.b, source.intensity],
+                                                };
+                                            }
+
+                                            let ubo = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                                label: Some("Instancing UBO"),
+                                                contents: bytemuck::cast_slice(&[uniforms]),
+                                                usage: wgpu::BufferUsages::UNIFORM,
+                                            });
+
+                                            let bgl = pipeline.get_bind_group_layout(0);
+                                            // TODO: In a real app we'd fetch the actual normal map from self.engine.textures
+                                            let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                                layout: &bgl,
+                                                entries: &[
+                                                    wgpu::BindGroupEntry { binding: 0, resource: ubo.as_entire_binding() },
+                                                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(tex_view) },
+                                                    wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(sampler) },
+                                                    wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(tex_view) }, // Fallback to albedo as normal map for now
+                                                ],
+                                                label: Some("Instancing BG"),
+                                            });
+
+                                            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                                label: Some("Instancing Pass"),
+                                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                                    view: &view, resolve_target: None,
+                                                    ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                                                })],
+                                                depth_stencil_attachment: self.engine.depth_texture_view.as_ref().map(|dv|
+                                                    wgpu::RenderPassDepthStencilAttachment {
+                                                        view: dv,
+                                                        depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store }),
+                                                        stencil_ops: None,
+                                                    }
+                                                ),
+                                                timestamp_writes: None, occlusion_query_set: None,
+                                            });
+
+                                            rpass.set_pipeline(pipeline);
+                                            rpass.set_bind_group(0, &bg, &[]);
+                                            rpass.set_vertex_buffer(0, mesh.vbo.slice(..));
+                                            rpass.set_vertex_buffer(1, instance_buf.slice(..));
+                                            rpass.set_index_buffer(mesh.ibo.slice(..), wgpu::IndexFormat::Uint32);
+                                            rpass.draw_indexed(0..mesh.index_count, 0, 0..instances.len() as u32);
+                                        }
+                                    }
+
+                                    // Sprint 71: Render Weapon View-Model with Sway
+                                    if let (Some(m_id), Some(t_id)) = (self.engine.weapon_mesh, self.engine.weapon_tex) {
+                                        let m_idx = m_id as usize;
+                                        if m_idx < self.engine.meshes.len() {
+                                            self.engine.ensure_canvas_mesh_pipeline();
+                                            if let (Some(pipeline), Some(device), Some(view_proj)) = (
+                                                &self.engine.canvas_mesh_pipeline,
+                                                &self.engine.device,
+                                                self.engine.camera3d_view_proj
+                                            ) {
+                                                // Calculate Sway Offset
+                                                let target_sway_x = -self.engine.mouse_delta.0 * 0.005;
+                                                let target_sway_y = -self.engine.mouse_delta.1 * 0.005;
+                                                self.engine.weapon_sway.0 += (target_sway_x - self.engine.weapon_sway.0) * 0.2;
+                                                self.engine.weapon_sway.1 += (target_sway_y - self.engine.weapon_sway.1) * 0.2;
+
+                                                // Build Identity-ish ViewProj for View-Model (to keep it fixed on screen)
+                                                // Actually, we use a custom projection to avoid clipping.
+                                                let aspect = self.engine.config.as_ref().unwrap().width as f32 / self.engine.config.as_ref().unwrap().height as f32;
+                                                let vm_proj = cgmath::perspective(cgmath::Deg(55.0), aspect, 0.01, 10.0);
+                                                let vm_view = cgmath::Matrix4::from_translation(cgmath::Vector3::new(
+                                                    0.4 + self.engine.weapon_sway.0, 
+                                                    -0.4 + self.engine.weapon_sway.1, 
+                                                    -0.8
+                                                ));
+                                                let vm_view_proj: [[f32; 4]; 4] = (vm_proj * vm_view).into();
+
+                                                let uniforms = MeshUniforms {
+                                                    view_proj: vm_view_proj,
+                                                    material: [1.0; 4],
+                                                    pbr: [0.0, 0.5, 0.0, 0.0],
+                                                    camera_pos: [0.0, 0.0, 0.0, 1.0],
+                                                    lights: [PointLightStruct { pos: [0.0, 2.0, 0.0, 1.0], color: [1.0, 1.0, 1.0, 2.0] }; 4],
+                                                };
+
+                                                let ubo = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                                    label: Some("Weapon UBO"),
+                                                    contents: bytemuck::cast_slice(&[uniforms]),
+                                                    usage: wgpu::BufferUsages::UNIFORM,
+                                                });
+
+                                                let bgl = pipeline.get_bind_group_layout(0);
+                                                // If we have a texture, use it.
+                                                let tex_view = if (t_id as usize) < self.engine.textures.len() { &self.engine.textures[t_id as usize].1 } else { self.engine.default_texture_view.as_ref().unwrap() };
+                                                let sampler = self.engine.default_sampler.as_ref().unwrap();
+
+                                                let bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                                    layout: &bgl,
+                                                    entries: &[
+                                                        wgpu::BindGroupEntry { binding: 0, resource: ubo.as_entire_binding() },
+                                                        wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(tex_view) },
+                                                        wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(sampler) },
+                                                        wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(tex_view) },
+                                                    ],
+                                                    label: Some("Weapon BG"),
+                                                });
+                                                
+                                                let singleton = [InstanceData {
+                                                    transform: [[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]],
+                                                    color_offset: [1.0; 4],
+                                                    material_pbr: [-1.0, 0.5, -1.0, 1.0], // Use uniform PBR (sentinel -1.0)
+                                                }];
+                                                let inst_vbo = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                                    label: Some("Weapon Inst"),
+                                                    contents: bytemuck::cast_slice(&singleton),
+                                                    usage: wgpu::BufferUsages::VERTEX,
+                                                });
+
+                                                let mesh = &self.engine.meshes[m_idx];
+                                                let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                                                    label: Some("Weapon Pass"),
+                                                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                                        view: &view, resolve_target: None,
+                                                        ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                                                    })],
+                                                    depth_stencil_attachment: self.engine.depth_texture_view.as_ref().map(|dv|
+                                                        wgpu::RenderPassDepthStencilAttachment {
+                                                            view: dv,
+                                                            depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Store }),
+                                                            stencil_ops: None,
+                                                        }
+                                                    ),
+                                                    timestamp_writes: None, occlusion_query_set: None,
+                                                });
+                                                rpass.set_pipeline(pipeline);
+                                                rpass.set_bind_group(0, &bg, &[]);
+                                                rpass.set_vertex_buffer(0, mesh.vbo.slice(..));
+                                                rpass.set_vertex_buffer(1, inst_vbo.slice(..));
+                                                rpass.set_index_buffer(mesh.ibo.slice(..), wgpu::IndexFormat::Uint32);
+                                                rpass.draw_indexed(0..mesh.index_count, 0, 0..1);
+                                            }
+                                        }
+                                    }
+
                                     renderer.update_buffers(
                                         device,
                                         queue,
@@ -3945,18 +4499,7 @@ impl ExecutionEngine {
                                                             view: &view,
                                                             resolve_target: None,
                                                             ops: wgpu::Operations {
-                                                                load: if has_voxels {
-                                                                    wgpu::LoadOp::Load
-                                                                } else {
-                                                                    wgpu::LoadOp::Clear(
-                                                                        wgpu::Color {
-                                                                            r: 0.05,
-                                                                            g: 0.05,
-                                                                            b: 0.05,
-                                                                            a: 1.0,
-                                                                        },
-                                                                    )
-                                                                },
+                                                                load: wgpu::LoadOp::Load, // Cleared at top of PollEvents
                                                                 store: wgpu::StoreOp::Store,
                                                             },
                                                         },

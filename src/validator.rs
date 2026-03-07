@@ -138,7 +138,8 @@ impl Validator {
             | Node::DrawVoxelGrid(n)
             | Node::EnableInteraction(n)
             | Node::EnablePhysics(n)
-            | Node::Return(n) => {
+            | Node::Return(n)
+            | Node::Abs(n) => {
                 self.check_node(n);
             }
             Node::FileWrite(f, d) | Node::FSWrite(f, d) => {
@@ -235,6 +236,7 @@ impl Validator {
                 self.check_node(v);
                 self.check_node(m);
             }
+            Node::Time | Node::GlobalTime => {}
             Node::RenderAsset(s, m, t, u) | Node::SetVoxel(s, m, t, u) => {
                 self.check_node(s);
                 self.check_node(m);
@@ -276,7 +278,6 @@ impl Validator {
             | Node::BoolLiteral(_)
             | Node::StringLiteral(_)
             | Node::Identifier(_)
-            | Node::Time
             | Node::MapCreate
             | Node::InitGraphics
             | Node::InitAudio
@@ -322,13 +323,25 @@ impl Validator {
                 self.check_node(primitive);
                 self.check_node(material);
             }
-            Node::Material3D { r, g, b, a, metallic, roughness } => {
+            Node::Material3D { r, g, b, a, metallic, roughness, texture_id } => {
                 self.check_node(r);
                 self.check_node(g);
                 self.check_node(b);
                 self.check_node(a);
                 self.check_node(metallic);
                 self.check_node(roughness);
+                if let Some(tid) = texture_id {
+                    self.check_node(tid);
+                }
+            }
+            Node::PointLight3D { x, y, z, r, g, b, intensity } => {
+                self.check_node(x);
+                self.check_node(y);
+                self.check_node(z);
+                self.check_node(r);
+                self.check_node(g);
+                self.check_node(b);
+                self.check_node(intensity);
             }
         }
     }

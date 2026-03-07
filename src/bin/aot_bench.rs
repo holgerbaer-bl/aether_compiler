@@ -6,7 +6,7 @@ fn main() {
         String::from("=== KnotenCore Chronos Benchmark (AOT) ===")
     );
     {
-        let mut timer = registry::registry_now();
+        let timer = registry::registry_now();
         let mut i: i64 = 0;
         let mut acc: i64 = 0;
         while i < 1_000_000 {

@@ -1,0 +1,63 @@
+{
+  "Block": [
+    { "InitWindow": [
+        { "IntLiteral": 1280 },
+        { "IntLiteral": 720 },
+        { "StringLiteral": "KnotenCore Sprint 69: Point Lighting Demo" }
+    ]},
+    "InitGraphics",
+    
+    { "PollEvents": {
+      "Block": [
+        { "RenderCanvas": {
+          "body": {
+            "Block": [
+              { "Camera3D": {
+                "pos_x": { "FloatLiteral": 0.0 }, "pos_y": { "FloatLiteral": 2.0 }, "pos_z": { "FloatLiteral": 6.0 }, 
+                "target_x": { "FloatLiteral": 0.0 }, "target_y": { "FloatLiteral": 0.0 }, "target_z": { "FloatLiteral": 0.0 }, 
+                "fov": { "FloatLiteral": 45.0 }
+              } },
+              
+              { "Assign": ["lx", { "Mul": [ { "Sin": "Time" }, { "FloatLiteral": 3.0 } ] }] },
+              { "Assign": ["ly", { "Mul": [ { "Cos": "Time" }, { "FloatLiteral": 2.0 } ] }] },
+              
+              { "PointLight3D": {
+                "x": { "Identifier": "lx" }, "y": { "Identifier": "ly" }, "z": { "FloatLiteral": 1.5 }, 
+                "r": { "FloatLiteral": 1.0 }, "g": { "FloatLiteral": 0.3 }, "b": { "FloatLiteral": 0.1 }, 
+                "intensity": { "FloatLiteral": 5.0 }
+              } },
+              
+              { "PointLight3D": {
+                "x": { "FloatLiteral": -3.0 }, "y": { "FloatLiteral": 1.0 }, "z": { "FloatLiteral": 0.0 }, 
+                "r": { "FloatLiteral": 0.1 }, "g": { "FloatLiteral": 0.1 }, "b": { "FloatLiteral": 1.0 }, 
+                "intensity": { "FloatLiteral": 2.0 }
+              } },
+
+              { "Material3D": {
+                "r": { "FloatLiteral": 0.7 }, "g": { "FloatLiteral": 0.7 }, "b": { "FloatLiteral": 0.7 }, "a": { "FloatLiteral": 1.0 }, 
+                "metallic": { "FloatLiteral": 0.9 }, 
+                "roughness": { "FloatLiteral": 0.1 }, 
+                "texture_id": null
+              } },
+              { "Mesh3D": {
+                "primitive": { "StringLiteral": "cube" },
+                "material": { "Block": [] }
+              } },
+              
+              { "Material3D": {
+                "r": { "FloatLiteral": 0.2 }, "g": { "FloatLiteral": 0.2 }, "b": { "FloatLiteral": 0.2 }, "a": { "FloatLiteral": 1.0 }, 
+                "metallic": { "FloatLiteral": 0.0 }, 
+                "roughness": { "FloatLiteral": 0.8 }, 
+                "texture_id": null
+              } },
+              { "Mesh3D": {
+                "primitive": { "StringLiteral": "plane" },
+                "material": { "Block": [] }
+              } }
+            ]
+          }
+        } }
+      ]
+    } }
+  ]
+}

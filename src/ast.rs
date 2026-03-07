@@ -21,6 +21,8 @@ pub enum Node {
     Cos(Box<Node>),
     Mat4Mul(Box<Node>, Box<Node>),
     Time,
+    GlobalTime,
+    Abs(Box<Node>),
     Eq(Box<Node>, Box<Node>),
     Lt(Box<Node>, Box<Node>),
     Gt(Box<Node>, Box<Node>),
@@ -106,6 +108,24 @@ pub enum Node {
         r: Box<Node>, g: Box<Node>, b: Box<Node>, a: Box<Node>,
         metallic: Box<Node>, roughness: Box<Node>,
         texture_id: Option<Box<Node>>,
+    },
+    // Sprint 71: PS3-Era FPS Foundation
+    MeshInstance3D {
+        mesh_id: Box<Node>,
+        transform: Box<Node>,
+        color_offset: Box<Node>,
+        pbr: Box<Node>,
+    },
+    FPSCamera {
+        fov: Box<Node>,
+    },
+    MouseGrab {
+        enabled: Box<Node>,
+    },
+    RaycastSimple,
+    WeaponViewModel {
+        mesh: Box<Node>,
+        tex: Box<Node>,
     },
 
     // Sprint 60: Async Connectivity

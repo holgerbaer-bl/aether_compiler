@@ -8,7 +8,6 @@ pub fn count_nodes(node: &Node) -> usize {
         | Node::BoolLiteral(_)
         | Node::StringLiteral(_)
         | Node::Identifier(_)
-        | Node::Time
         | Node::InitGraphics
         | Node::InitVoxelMap
         | Node::InitAudio
@@ -21,15 +20,21 @@ pub fn count_nodes(node: &Node) -> usize {
         | Node::Sub(l, r)
         | Node::Mul(l, r)
         | Node::Div(l, r)
+        | Node::Mat4Mul(l, r)
         | Node::Eq(l, r)
         | Node::Lt(l, r)
         | Node::Gt(l, r)
         | Node::BitAnd(l, r)
         | Node::BitShiftLeft(l, r)
         | Node::BitShiftRight(l, r)
-        | Node::Index(l, r)
-        | Node::Concat(l, r)
-        | Node::Mat4Mul(l, r)
+        | Node::Concat(l, r) => {
+            count += count_nodes(l) + count_nodes(r);
+        }
+        Node::Sin(n) | Node::Cos(n) | Node::Abs(n) => {
+            count += count_nodes(n);
+        }
+        Node::Time | Node::GlobalTime => {}
+        Node::Index(l, r)
         | Node::ArrayPush(l, r)
         | Node::ArrayGet(l, r)
         | Node::MapGet(l, r)
@@ -65,9 +70,7 @@ pub fn count_nodes(node: &Node) -> usize {
         | Node::DrawVoxelGrid(val)
         | Node::EnableInteraction(val)
         | Node::EnablePhysics(val)
-        | Node::Return(val)
-        | Node::Sin(val)
-        | Node::Cos(val) => {
+        | Node::Return(val) => {
             count += count_nodes(val);
         }
 
@@ -176,9 +179,16 @@ pub fn count_nodes(node: &Node) -> usize {
         Node::Mesh3D { primitive, material } => {
             count += count_nodes(primitive) + count_nodes(material);
         }
-        Node::Material3D { r, g, b, a, metallic, roughness } => {
+        Node::Material3D { r, g, b, a, metallic, roughness, texture_id } => {
             count += count_nodes(r) + count_nodes(g) + count_nodes(b) + count_nodes(a)
                 + count_nodes(metallic) + count_nodes(roughness);
+            if let Some(tid) = texture_id {
+                count += count_nodes(tid);
+            }
+        }
+        Node::PointLight3D { x, y, z, r, g, b, intensity } => {
+            count += count_nodes(x) + count_nodes(y) + count_nodes(z)
+                + count_nodes(r) + count_nodes(g) + count_nodes(b) + count_nodes(intensity);
         }
     }
     count
@@ -192,7 +202,6 @@ pub fn optimize(node: Node) -> Node {
         Node::StringLiteral(v) => Node::StringLiteral(v),
         Node::Identifier(name) => Node::Identifier(name),
         Node::Import(path) => Node::Import(path),
-        Node::Time => Node::Time,
         Node::InitGraphics => Node::InitGraphics,
         Node::InitVoxelMap => Node::InitVoxelMap,
         Node::InitAudio => Node::InitAudio,
@@ -323,10 +332,13 @@ pub fn optimize(node: Node) -> Node {
         }
 
         Node::Return(val) => Node::Return(Box::new(optimize(*val))),
-        Node::Sin(val) => Node::Sin(Box::new(optimize(*val))),
-        Node::Cos(val) => Node::Cos(Box::new(optimize(*val))),
+        Node::Sin(n) => Node::Sin(Box::new(optimize(*n))),
+        Node::Cos(n) => Node::Cos(Box::new(optimize(*n))),
+        Node::Abs(n) => Node::Abs(Box::new(optimize(*n))),
 
         Node::Mat4Mul(l, r) => Node::Mat4Mul(Box::new(optimize(*l)), Box::new(optimize(*r))),
+        Node::Time => Node::Time,
+        Node::GlobalTime => Node::GlobalTime,
         Node::FileRead(f) => Node::FileRead(Box::new(optimize(*f))), // Modified
         Node::FSRead(f) => Node::FSRead(Box::new(optimize(*f))),     // New
         Node::FileWrite(f, d) => Node::FileWrite(Box::new(optimize(*f)), Box::new(optimize(*d))), // Modified
@@ -448,13 +460,23 @@ pub fn optimize(node: Node) -> Node {
             primitive: Box::new(optimize(*primitive)),
             material: Box::new(optimize(*material)),
         },
-        Node::Material3D { r, g, b, a, metallic, roughness } => Node::Material3D {
+        Node::Material3D { r, g, b, a, metallic, roughness, texture_id } => Node::Material3D {
             r: Box::new(optimize(*r)),
             g: Box::new(optimize(*g)),
             b: Box::new(optimize(*b)),
             a: Box::new(optimize(*a)),
             metallic: Box::new(optimize(*metallic)),
             roughness: Box::new(optimize(*roughness)),
+            texture_id: texture_id.map(|t| Box::new(optimize(*t))),
+        },
+        Node::PointLight3D { x, y, z, r, g, b, intensity } => Node::PointLight3D {
+            x: Box::new(optimize(*x)),
+            y: Box::new(optimize(*y)),
+            z: Box::new(optimize(*z)),
+            r: Box::new(optimize(*r)),
+            g: Box::new(optimize(*g)),
+            b: Box::new(optimize(*b)),
+            intensity: Box::new(optimize(*intensity)),
         },
     }
 }

@@ -1,5 +1,4 @@
 use crate::ast::Node;
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
@@ -622,6 +621,10 @@ impl Parser {
             // AST Map generated directly by Agent
             "Print" => Node::Print(Box::new(args.remove(0))),
             "Time" => Node::Time,
+            "GlobalTime" => Node::GlobalTime,
+            "Sin" => Node::Sin(Box::new(args.remove(0))),
+            "Cos" => Node::Cos(Box::new(args.remove(0))),
+            "Abs" => Node::Abs(Box::new(args.remove(0))),
             "InitGraphics" => Node::InitGraphics,
             "InitAudio" => Node::InitAudio,
             "GetLastKeypress" => Node::GetLastKeypress,

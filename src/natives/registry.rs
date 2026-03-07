@@ -6,7 +6,6 @@ use std::io::Write;
 use std::sync::Arc;
 use std::sync::Mutex;
 use wgpu::util::DeviceExt;
-use winit::event_loop::EventLoop;
 use winit::window::Window as WinitWindow;
 
 use std::collections::HashSet;
@@ -110,6 +109,7 @@ unsafe impl Sync for SendVoxelWorld {}
 // ── Isometric software renderer ───────────────────────────────────────
 
 /// Scanline polygon fill for convex polygons (used for isometric cube faces).
+#[allow(dead_code)]
 fn fill_poly(buffer: &mut Vec<u32>, width: usize, height: usize, pts: &[(i32, i32)], color: u32) {
     let min_y = pts.iter().map(|&(_, y)| y).min().unwrap_or(0).max(0) as usize;
     let raw_max = pts.iter().map(|&(_, y)| y).max().unwrap_or(0) as usize;
@@ -150,6 +150,7 @@ fn fill_poly(buffer: &mut Vec<u32>, width: usize, height: usize, pts: &[(i32, i3
 }
 
 /// Isometric projection render — painters-sorted, 3-face-per-voxel.
+#[allow(dead_code)]
 fn iso_render(buffer: &mut Vec<u32>, width: usize, height: usize, voxels: &[[i32; 3]]) {
     buffer.iter_mut().for_each(|p| *p = 0x0d1b2a); // dark navy background
     let cx = (width as i32) / 2;

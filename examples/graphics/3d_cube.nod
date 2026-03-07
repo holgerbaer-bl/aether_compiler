@@ -1,43 +1,54 @@
 {
   "Block": [
-    { "Print": { "StringLiteral": "=== KnotenCore 3D Cube Demo (Sprint 68 - Mesh3D) ===" } },
+    { "Print": { "StringLiteral": "=== KnotenCore 3D Cube Demo (Sprint 68) ===" } },
 
-    { "Camera3D": {
-        "pos_x":    { "FloatLiteral": 3.0 },
-        "pos_y":    { "FloatLiteral": 2.5 },
-        "pos_z":    { "FloatLiteral": 4.0 },
-        "target_x": { "FloatLiteral": 0.0 },
-        "target_y": { "FloatLiteral": 0.0 },
-        "target_z": { "FloatLiteral": 0.0 },
-        "fov":      { "FloatLiteral": 60.0 }
+    { "InitWindow": [
+        { "IntLiteral": 1280 },
+        { "IntLiteral": 720 },
+        { "StringLiteral": "KnotenCore — 3D Cube (Sprint 68)" }
+    ]},
+    "InitGraphics",
+    
+    { "PollEvents": {
+        "Block": [
+          { "Camera3D": {
+              "pos_x":    { "FloatLiteral": 3.0 },
+              "pos_y":    { "FloatLiteral": 2.5 },
+              "pos_z":    { "FloatLiteral": 4.0 },
+              "target_x": { "FloatLiteral": 0.0 },
+              "target_y": { "FloatLiteral": 0.0 },
+              "target_z": { "FloatLiteral": 0.0 },
+              "fov":      { "FloatLiteral": 60.0 }
+          }},
+
+          { "RenderCanvas": {
+              "body": {
+                "Block": [
+                  { "Material3D": {
+                      "r":         { "FloatLiteral": 0.2 },
+                      "g":         { "FloatLiteral": 0.5 },
+                      "b":         { "FloatLiteral": 1.0 },
+                      "a":         { "FloatLiteral": 1.0 },
+                      "metallic":  { "FloatLiteral": 0.15 },
+                      "roughness": { "FloatLiteral": 0.55 }
+                  }},
+                  { "Mesh3D": {
+                      "primitive": { "StringLiteral": "cube" },
+                      "material": { "Material3D": {
+                          "r":         { "FloatLiteral": 0.2 },
+                          "g":         { "FloatLiteral": 0.5 },
+                          "b":         { "FloatLiteral": 1.0 },
+                          "a":         { "FloatLiteral": 1.0 },
+                          "metallic":  { "FloatLiteral": 0.15 },
+                          "roughness": { "FloatLiteral": 0.55 }
+                      }}
+                  }}
+                ]
+              }
+          }}
+        ]
     }},
 
-    { "RenderCanvas": {
-        "body": {
-          "Block": [
-            { "Material3D": {
-                "r":         { "FloatLiteral": 0.2 },
-                "g":         { "FloatLiteral": 0.5 },
-                "b":         { "FloatLiteral": 1.0 },
-                "a":         { "FloatLiteral": 1.0 },
-                "metallic":  { "FloatLiteral": 0.1 },
-                "roughness": { "FloatLiteral": 0.6 }
-            }},
-            { "Mesh3D": {
-                "primitive": { "StringLiteral": "cube" },
-                "material":  { "Material3D": {
-                    "r":         { "FloatLiteral": 0.2 },
-                    "g":         { "FloatLiteral": 0.5 },
-                    "b":         { "FloatLiteral": 1.0 },
-                    "a":         { "FloatLiteral": 1.0 },
-                    "metallic":  { "FloatLiteral": 0.1 },
-                    "roughness": { "FloatLiteral": 0.6 }
-                }}
-            }}
-          ]
-        }
-    }},
-
-    { "Print": { "StringLiteral": "Cube rendered." } }
+    { "Print": { "StringLiteral": "Demo finished." } }
   ]
 }

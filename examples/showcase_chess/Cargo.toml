@@ -1,8 +1,0 @@
-[package]
-name = "showcase_chess"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-knoten_core = { path = "../../" }
-serde_json = "1.0"

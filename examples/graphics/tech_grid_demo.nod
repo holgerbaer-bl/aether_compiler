@@ -1,0 +1,93 @@
+{
+  "Block": [
+    { "InitWindow": [ 
+        { "IntLiteral": 1280 }, 
+        { "IntLiteral": 720 }, 
+        { "StringLiteral": "Knoten Engine - Sprint 70 Tech Demo" } 
+    ] },
+    { "InitGraphics": null },
+    
+    { "Assign": [ "grid_size", { "IntLiteral": 20 } ] },
+    { "Assign": [ "spacing", { "FloatLiteral": 1.2 } ] },
+
+    { "PollEvents": {
+      "Block": [
+        { "Assign": [ "t", { "GlobalTime": null } ] },
+        
+        { "Camera3D": {
+            "pos_x": { "Mul": [ { "Cos": { "Mul": [ { "FloatLiteral": 0.0005 }, { "Identifier": "t" } ] } }, { "FloatLiteral": 15.0 } ] },
+            "pos_y": { "FloatLiteral": 10.0 },
+            "pos_z": { "Mul": [ { "Sin": { "Mul": [ { "FloatLiteral": 0.0005 }, { "Identifier": "t" } ] } }, { "FloatLiteral": 15.0 } ] },
+            "target_x": { "FloatLiteral": 0.0 },
+            "target_y": { "FloatLiteral": 0.0 },
+            "target_z": { "FloatLiteral": 0.0 },
+            "fov": { "FloatLiteral": 45.0 }
+        } },
+
+        { "RenderCanvas": {
+          "body": {
+            "Block": [
+              { "Assign": [ "c_x", { "Mul": [ { "Cos": { "Mul": [ { "FloatLiteral": 0.001 }, { "Identifier": "t" } ] } }, { "FloatLiteral": 8.0 } ] } ] },
+              { "Assign": [ "c_z", { "Mul": [ { "Sin": { "Mul": [ { "FloatLiteral": 0.001 }, { "Identifier": "t" } ] } }, { "FloatLiteral": 8.0 } ] } ] },
+              { "PointLight3D": {
+                  "x": { "Identifier": "c_x" }, "y": { "FloatLiteral": 2.0 }, "z": { "Identifier": "c_z" },
+                  "r": { "FloatLiteral": 0.0 }, "g": { "FloatLiteral": 1.0 }, "b": { "FloatLiteral": 1.0 },
+                  "intensity": { "FloatLiteral": 5.0 }
+              } },
+
+              { "Assign": [ "m_x", { "Mul": [ { "Sin": { "Mul": [ { "FloatLiteral": 0.0007 }, { "Identifier": "t" } ] } }, { "FloatLiteral": 10.0 } ] } ] },
+              { "Assign": [ "m_z", { "Mul": [ { "Cos": { "Mul": [ { "FloatLiteral": 0.0014 }, { "Identifier": "t" } ] } }, { "FloatLiteral": 5.0 } ] } ] },
+              { "PointLight3D": {
+                  "x": { "Identifier": "m_x" }, "y": { "FloatLiteral": 3.0 }, "z": { "Identifier": "m_z" },
+                  "r": { "FloatLiteral": 1.0 }, "g": { "FloatLiteral": 0.0 }, "b": { "FloatLiteral": 1.0 },
+                  "intensity": { "FloatLiteral": 5.0 }
+              } },
+
+              { "Assign": [ "l_x", { "Mul": [ { "Cos": { "Mul": [ { "FloatLiteral": 0.002 }, { "Identifier": "t" } ] } }, { "FloatLiteral": 6.0 } ] } ] },
+              { "Assign": [ "l_y", { "Add": [ { "FloatLiteral": 4.0 }, { "Mul": [ { "Sin": { "Mul": [ { "FloatLiteral": 0.003 }, { "Identifier": "t" } ] } }, { "FloatLiteral": 2.0 } ] } ] } ] },
+              { "PointLight3D": {
+                  "x": { "Identifier": "l_x" }, "y": { "Identifier": "l_y" }, "z": { "FloatLiteral": 2.0 },
+                  "r": { "FloatLiteral": 0.0 }, "g": { "FloatLiteral": 1.0 }, "b": { "FloatLiteral": 0.0 },
+                  "intensity": { "FloatLiteral": 5.0 }
+              } },
+
+              { "Assign": [ "i", { "IntLiteral": 0 } ] },
+              { "While": [
+                  { "Lt": [ { "Identifier": "i" }, { "Identifier": "grid_size" } ] },
+                  { "Block": [
+                      { "Assign": [ "j", { "IntLiteral": 0 } ] },
+                      { "While": [
+                          { "Lt": [ { "Identifier": "j" }, { "Identifier": "grid_size" } ] },
+                          { "Block": [
+                              { "Assign": [ "px", { "Mul": [ { "Sub": [ { "Identifier": "i" }, { "FloatLiteral": 10.0 } ] }, { "Identifier": "spacing" } ] } ] },
+                              { "Assign": [ "pz", { "Mul": [ { "Sub": [ { "Identifier": "j" }, { "FloatLiteral": 10.0 } ] }, { "Identifier": "spacing" } ] } ] },
+                              { "Assign": [ "dist", { "Add": [ { "Mul": [ { "Identifier": "px" }, { "Identifier": "px" } ] }, { "Mul": [ { "Identifier": "pz" }, { "Identifier": "pz" } ] } ] } ] },
+                              { "Assign": [ "wave", { "Sin": { "Add": [ { "Mul": [ { "FloatLiteral": 0.002 }, { "Identifier": "t" } ] }, { "Mul": [ { "FloatLiteral": 0.1 }, { "Identifier": "dist" } ] } ] } } ] },
+                              { "Assign": [ "py", { "Mul": [ { "Identifier": "wave" }, { "FloatLiteral": 1.5 } ] } ] },
+
+                              { "Transform2D": {
+                                  "x": { "Identifier": "px" }, "y": { "Identifier": "py" }, "rotation": { "FloatLiteral": 0.0 }, "scale": { "FloatLiteral": 1.0 },
+                                  "body": {
+                                      "Block": [
+                                          { "Material3D": {
+                                              "r": { "FloatLiteral": 0.2 }, "g": { "FloatLiteral": 0.2 }, "b": { "FloatLiteral": 0.3 }, "a": { "FloatLiteral": 1.0 },
+                                              "metallic": { "FloatLiteral": 0.9 }, "roughness": { "FloatLiteral": 0.1 },
+                                              "texture_id": null
+                                          } },
+                                          { "Mesh3D": { "primitive": { "StringLiteral": "cube" }, "material": { "Block": [] } } }
+                                      ]
+                                  }
+                              } },
+                              { "Assign": [ "j", { "Add": [ { "Identifier": "j" }, { "IntLiteral": 1 } ] } ] }
+                          ] }
+                      ] },
+                      { "Assign": [ "i", { "Add": [ { "Identifier": "i" }, { "IntLiteral": 1 } ] } ] }
+                  ] }
+              ] }
+            ]
+          }
+        } }
+      ]
+    } }
+  ]
+}
