@@ -11,7 +11,15 @@ Despite sounding like an aggressive underground music style from Berlin, the nam
 
 So welcome to KnotenCore: Hardcore Nodes. We promise it won't tangle your logic.
 
-## 2. Why it exists ("Agent First")
+## 2. Modular Engine Architecture (Sprint 72)
+To maintain long-term stability and reduce compilation times, the core engine has been modularized into specialized components:
+
+- **`src/executor.rs`**: The backbone of the engine. Acts as a lightweight **Coordinator** and **State-Holder** (`ExecutionEngine`). It orchestrates data flow between all other modules.
+- **`src/evaluator.rs`**: The brain. Handles **AST Parsing**, recursive evaluation, and pure logical/mathematical execution.
+- **`src/renderer.rs`**: The eyes. Unified **WGPU** logic, shader management, Hardware-Instancing, and high-performance draw calls.
+- **`src/window.rs`**: The skin. Manages the **winit Event-Loop**, application lifecycle, and hardware input (MouseGrab/Keyboard).
+
+## 3. Why it exists ("Agent First")
 The current app development ecosystem is heavily burdened with human-centric boilerplate, fragmented tooling, and bloated artifact pipelines. KnotenCore eliminates all of this overhead. By providing a **deterministic, token-efficient runtime expressly built for AIs**, it shifts the paradigm from "AI writing React code for humans" to "AI writing Neural DSL code for a bare-metal Agent VM."
 It enables AI agents to read clear diagnostic JSON logs, self-heal instantly upon failure, and deliver highly optimized graphical applications (under 5MB).
 
