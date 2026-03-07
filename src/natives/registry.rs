@@ -9,6 +9,8 @@ use wgpu::util::DeviceExt;
 use winit::window::Window as WinitWindow;
 
 use std::collections::HashSet;
+#[cfg(not(target_os = "windows"))]
+use winit::event_loop::EventLoop;
 use winit::keyboard::{KeyCode, PhysicalKey};
 
 pub struct InputState {

@@ -1482,7 +1482,7 @@ impl ExecutionEngine {
 
             // ─── Sprint 68: Native 3D/2D Render Scene Graph ──────────────────────────
 
-            /// Material3D — stores material params so the next Mesh3D draw uses them.
+            // Material3D — stores material params so the next Mesh3D draw uses them.
             Node::Material3D { r, g, b, a, metallic, roughness, texture_id } => {
                 let mut f = |n| match self.evaluate_inner(n) {
                     ExecResult::Value(RelType::Float(v)) => v as f32,
@@ -1501,7 +1501,7 @@ impl ExecutionEngine {
                 ExecResult::Value(RelType::Void)
             }
 
-            /// PointLight3D - adds a point light to the scene.
+            // PointLight3D - adds a point light to the scene.
             Node::PointLight3D { x, y, z, r, g, b, intensity } => {
                 let px = match self.evaluate_inner(x) { ExecResult::Value(RelType::Float(v)) => v as f32, ExecResult::Value(RelType::Int(v)) => v as f32, _ => 0.0 };
                 let py = match self.evaluate_inner(y) { ExecResult::Value(RelType::Float(v)) => v as f32, ExecResult::Value(RelType::Int(v)) => v as f32, _ => 0.0 };
@@ -4380,7 +4380,7 @@ impl ExecutionEngine {
                                     if let (Some(m_id), Some(t_id)) = (self.engine.weapon_mesh, self.engine.weapon_tex) {
                                         let m_idx = m_id as usize;
                                         if m_idx < self.engine.meshes.len() {
-                                            if let (Some(pipeline), Some(device), Some(view_proj)) = (
+                                            if let (Some(pipeline), Some(device), Some(_view_proj)) = (
                                                 &self.engine.canvas_mesh_pipeline,
                                                 &self.engine.device,
                                                 self.engine.camera3d_view_proj
