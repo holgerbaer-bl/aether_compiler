@@ -170,5 +170,6 @@ impl<'a> ApplicationHandler for KnotenApp<'a> {
         }
 
         let _ = self.engine.evaluate(self.body);
+        self.engine.present_frame();
     }
 }

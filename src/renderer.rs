@@ -1,5 +1,6 @@
 use crate::executor::{ExecutionEngine, VoxelVertex, InstanceData, PointLightStruct, MeshUniforms};
 use wgpu::util::DeviceExt;
+use std::sync::Arc;
 
 impl ExecutionEngine {
     pub fn ensure_canvas_mesh_pipeline(&mut self) {
@@ -112,11 +113,9 @@ impl ExecutionEngine {
         self.canvas_mesh_pipeline = Some(pipeline);
     }
 
-    pub fn draw_mesh_immediate(&mut self, prim_name: &str) -> crate::executor::ExecResult {
-        use crate::executor::ExecResult;
-        self.ensure_canvas_mesh_pipeline();
-        if self.canvas_mesh_pipeline.is_none() || self.device.is_none() || self.camera3d_view_proj.is_none() {
-            return ExecResult::Fault("Mesh3D requires active RenderCanvas + Camera3D + WGPU device".into());
+    pub fn get_or_create_mesh(&mut self, prim_name: &str) -> (Arc<wgpu::Buffer>, Arc<wgpu::Buffer>, u32) {
+        if let Some(m) = self.mesh_cache.get(prim_name) {
+            return (m.vbo.clone(), m.ibo.clone(), m.index_count);
         }
 
         let (verts, indices) = match prim_name {
@@ -151,6 +150,24 @@ impl ExecutionEngine {
             }
         };
 
+        let device = self.device.as_ref().unwrap();
+        let vbo = Arc::new(device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: None, contents: bytemuck::cast_slice(&verts), usage: wgpu::BufferUsages::VERTEX }));
+        let ibo = Arc::new(device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: None, contents: bytemuck::cast_slice(&indices), usage: wgpu::BufferUsages::INDEX }));
+        let index_count = indices.len() as u32;
+
+        let m = crate::executor::MeshBuffers { vbo: vbo.clone(), ibo: ibo.clone(), index_count };
+        self.mesh_cache.insert(prim_name.to_string(), m);
+        (vbo, ibo, index_count)
+    }
+
+    pub fn draw_mesh_immediate(&mut self, prim_name: &str) -> crate::executor::ExecResult {
+        use crate::executor::ExecResult;
+        self.ensure_canvas_mesh_pipeline();
+        if self.canvas_mesh_pipeline.is_none() || self.device.is_none() || self.camera3d_view_proj.is_none() {
+            return ExecResult::Fault("Mesh3D requires active RenderCanvas + Camera3D + WGPU device".into());
+        }
+        let (vbo, ibo, index_count) = self.get_or_create_mesh(prim_name);
+
         let mut uniforms = MeshUniforms {
             view_proj: self.camera3d_view_proj.unwrap(),
             material: [self.canvas_material[0], self.canvas_material[1], self.canvas_material[2], self.canvas_material[3]],
@@ -164,9 +181,16 @@ impl ExecutionEngine {
 
         let device = self.device.as_ref().unwrap();
         let queue = self.queue.as_ref().unwrap();
-        let vbo = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: None, contents: bytemuck::cast_slice(&verts), usage: wgpu::BufferUsages::VERTEX });
-        let ibo = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: None, contents: bytemuck::cast_slice(&indices), usage: wgpu::BufferUsages::INDEX });
-        let ubo = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: None, contents: bytemuck::cast_slice(&[uniforms]), usage: wgpu::BufferUsages::UNIFORM });
+        if self.mesh_ubo.is_none() {
+            self.mesh_ubo = Some(device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Mesh Uniform Buffer"),
+                size: std::mem::size_of::<MeshUniforms>() as u64,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }));
+        }
+        let ubo = self.mesh_ubo.as_ref().unwrap();
+        queue.write_buffer(ubo, 0, bytemuck::cast_slice(&[uniforms]));
 
         let bgl = self.canvas_mesh_pipeline.as_ref().unwrap().get_bind_group_layout(0);
         let tex_id = self.canvas_material[6] as i64;
@@ -185,8 +209,12 @@ impl ExecutionEngine {
             label: None,
         });
 
+        if self.frame_encoder.is_none() {
+            self.frame_encoder = Some(device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None }));
+        }
+        let enc = self.frame_encoder.as_mut().unwrap();
+
         let fb_view = match self.current_canvas_view.as_ref() { Some(v) => v, None => return ExecResult::Fault("No active canvas view".into()) };
-        let mut enc = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
             let mut rpass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
@@ -202,9 +230,18 @@ impl ExecutionEngine {
             let inst_vbo = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: None, contents: bytemuck::cast_slice(&singleton), usage: wgpu::BufferUsages::VERTEX });
             rpass.set_vertex_buffer(1, inst_vbo.slice(..));
             rpass.set_index_buffer(ibo.slice(..), wgpu::IndexFormat::Uint32);
-            rpass.draw_indexed(0..indices.len() as u32, 0, 0..1);
+            rpass.draw_indexed(0..index_count, 0, 0..1);
         }
-        queue.submit(std::iter::once(enc.finish()));
         ExecResult::Value(crate::executor::RelType::Void)
+    }
+
+    pub fn present_frame(&mut self) {
+        if let (Some(queue), Some(enc)) = (self.queue.as_ref(), self.frame_encoder.take()) {
+            queue.submit(std::iter::once(enc.finish()));
+        }
+        if let Some(frame) = self.current_canvas_frame.take() {
+            frame.present();
+        }
+        self.current_canvas_view = None;
     }
 }

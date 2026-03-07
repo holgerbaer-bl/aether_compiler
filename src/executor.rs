@@ -85,8 +85,8 @@ impl Default for VoiceState {
 }
 
 pub struct MeshBuffers {
-    pub vbo: wgpu::Buffer,
-    pub ibo: wgpu::Buffer,
+    pub vbo: Arc<wgpu::Buffer>,
+    pub ibo: Arc<wgpu::Buffer>,
     pub index_count: u32,
 }
 
@@ -183,6 +183,9 @@ pub struct ExecutionEngine {
     pub velocity_y: f32,
     pub is_grounded: bool,
     pub voxel_instance_buffer: Option<wgpu::Buffer>,
+    pub mesh_cache: HashMap<String, MeshBuffers>,
+    pub frame_encoder: Option<wgpu::CommandEncoder>,
+    pub mesh_ubo: Option<wgpu::Buffer>,
     pub meshes: Vec<MeshBuffers>,
     pub textures: Vec<(wgpu::Texture, wgpu::TextureView, wgpu::BindGroup, wgpu::BindGroupLayout)>,
     pub point_lights: Vec<PointLightData>,
@@ -293,7 +296,7 @@ impl ExecutionEngine {
             voxel_vbo: None, voxel_ibo: None, voxel_instances: Vec::new(), voxel_bind_group: None, voxel_atlas_bind_group: None,
             voxel_ubo: None, voxel_map: HashMap::new(), voxel_map_active: false, voxel_map_dirty: false,
             interaction_enabled: false, physics_enabled: false, velocity_y: 0.0, is_grounded: false,
-            voxel_instance_buffer: None, meshes: Vec::new(), textures: Vec::new(), instance_queues: HashMap::new(),
+            voxel_instance_buffer: None, mesh_cache: HashMap::new(), frame_encoder: None, mesh_ubo: None, meshes: Vec::new(), textures: Vec::new(), instance_queues: HashMap::new(),
             mouse_grab_enabled: false, mouse_delta: (0.0, 0.0), glyph_brush: None, staging_belt: None,
             keyboard_buffer: Arc::new(Mutex::new(String::new())), egui_ctx: None, egui_state: None,
             egui_renderer: None, egui_ui_ptr: None, voices: None, stream_samples: None, stream_pos: None,
