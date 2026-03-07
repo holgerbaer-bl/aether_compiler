@@ -343,6 +343,23 @@ impl Validator {
                 self.check_node(b);
                 self.check_node(intensity);
             }
+            Node::MeshInstance3D { mesh_id, transform, color_offset, pbr } => {
+                self.check_node(mesh_id);
+                self.check_node(transform);
+                self.check_node(color_offset);
+                self.check_node(pbr);
+            }
+            Node::FPSCamera { fov } => {
+                self.check_node(fov);
+            }
+            Node::MouseGrab { enabled } => {
+                self.check_node(enabled);
+            }
+            Node::RaycastSimple => {}
+            Node::WeaponViewModel { mesh, tex } => {
+                self.check_node(mesh);
+                self.check_node(tex);
+            }
         }
     }
 }

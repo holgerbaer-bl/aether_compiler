@@ -190,6 +190,19 @@ pub fn count_nodes(node: &Node) -> usize {
             count += count_nodes(x) + count_nodes(y) + count_nodes(z)
                 + count_nodes(r) + count_nodes(g) + count_nodes(b) + count_nodes(intensity);
         }
+        Node::MeshInstance3D { mesh_id, transform, color_offset, pbr } => {
+            count += count_nodes(mesh_id) + count_nodes(transform) + count_nodes(color_offset) + count_nodes(pbr);
+        }
+        Node::FPSCamera { fov } => {
+            count += count_nodes(fov);
+        }
+        Node::MouseGrab { enabled } => {
+            count += count_nodes(enabled);
+        }
+        Node::RaycastSimple => {}
+        Node::WeaponViewModel { mesh, tex } => {
+            count += count_nodes(mesh) + count_nodes(tex);
+        }
     }
     count
 }
@@ -477,6 +490,19 @@ pub fn optimize(node: Node) -> Node {
             g: Box::new(optimize(*g)),
             b: Box::new(optimize(*b)),
             intensity: Box::new(optimize(*intensity)),
+        },
+        Node::MeshInstance3D { mesh_id, transform, color_offset, pbr } => Node::MeshInstance3D {
+            mesh_id: Box::new(optimize(*mesh_id)),
+            transform: Box::new(optimize(*transform)),
+            color_offset: Box::new(optimize(*color_offset)),
+            pbr: Box::new(optimize(*pbr)),
+        },
+        Node::FPSCamera { fov } => Node::FPSCamera { fov: Box::new(optimize(*fov)) },
+        Node::MouseGrab { enabled } => Node::MouseGrab { enabled: Box::new(optimize(*enabled)) },
+        Node::RaycastSimple => Node::RaycastSimple,
+        Node::WeaponViewModel { mesh, tex } => Node::WeaponViewModel {
+            mesh: Box::new(optimize(*mesh)),
+            tex: Box::new(optimize(*tex)),
         },
     }
 }

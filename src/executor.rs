@@ -207,6 +207,10 @@ pub struct ExecutionEngine {
     pub config: Option<wgpu::SurfaceConfiguration>,
     pub depth_texture_view: Option<wgpu::TextureView>,
     pub current_canvas_view: Option<wgpu::TextureView>,
+    pub current_canvas_frame: Option<wgpu::SurfaceTexture>,
+    pub default_texture_view: Option<wgpu::TextureView>,
+    pub default_sampler: Option<wgpu::Sampler>,
+    pub startup_time: std::time::Instant,
     pub shaders: Vec<wgpu::ShaderModule>,
     pub render_pipelines: HashMap<usize, wgpu::RenderPipeline>,
     pub native_modules: Vec<Box<dyn NativeModule>>,
@@ -302,13 +306,7 @@ pub struct ExecutionEngine {
     pub canvas_material: [f32; 8],                 // [r,g,b,a, metallic,roughness, pad,pad]
     pub sprite2d_queue: Vec<(i64, f32, f32, f32, f32)>, // (tex_id, x, y, rotation, scale)
 
-    // Bugfix: Shared frame state to prevent flickering and fighting for the frame
-    pub current_canvas_frame: Option<wgpu::SurfaceTexture>,
-    pub current_canvas_view: Option<wgpu::TextureView>,
     pub transform2d_stack: Vec<[f32; 4]>,           // pushed (x,y,rot,scale) transforms
-    pub current_canvas_frame: Option<wgpu::SurfaceTexture>,
-    pub current_canvas_view: Option<wgpu::TextureView>,
-    pub default_sampler: Option<wgpu::Sampler>,
 
     // Sprint 71: Weapon View-Model
     pub weapon_mesh: Option<i64>,
@@ -355,6 +353,9 @@ impl ExecutionEngine {
             point_lights: Vec::new(),
             current_canvas_frame: None,
             current_canvas_view: None,
+            default_texture_view: None,
+            default_sampler: None,
+            startup_time: std::time::Instant::now(),
             input_w: false,
             input_a: false,
             input_s: false,
@@ -412,13 +413,10 @@ impl ExecutionEngine {
             camera3d_view_proj: None,
             canvas_material: [1.0, 1.0, 1.0, 1.0, 0.0, 0.5, 0.0, 0.0],
             sprite2d_queue: Vec::new(),
-            point_lights: Vec::new(),
+            transform2d_stack: Vec::new(),
             weapon_mesh: None,
             weapon_tex: None,
             weapon_sway: (0.0, 0.0),
-            startup_time: std::time::Instant::now(),
-            default_texture_view: None,
-            default_sampler: None,
             bridge: Box::new(CoreBridge),
         };
 
@@ -1505,15 +1503,18 @@ impl ExecutionEngine {
 
             /// PointLight3D - adds a point light to the scene.
             Node::PointLight3D { x, y, z, r, g, b, intensity } => {
-                let mut f = |n| match self.evaluate_inner(n) {
-                    ExecResult::Value(RelType::Float(v)) => v as f32,
-                    ExecResult::Value(RelType::Int(v)) => v as f32,
-                    _ => 0.0,
-                };
+                let px = match self.evaluate_inner(x) { ExecResult::Value(RelType::Float(v)) => v as f32, ExecResult::Value(RelType::Int(v)) => v as f32, _ => 0.0 };
+                let py = match self.evaluate_inner(y) { ExecResult::Value(RelType::Float(v)) => v as f32, ExecResult::Value(RelType::Int(v)) => v as f32, _ => 0.0 };
+                let pz = match self.evaluate_inner(z) { ExecResult::Value(RelType::Float(v)) => v as f32, ExecResult::Value(RelType::Int(v)) => v as f32, _ => 0.0 };
+                let pr = match self.evaluate_inner(r) { ExecResult::Value(RelType::Float(v)) => v as f32, ExecResult::Value(RelType::Int(v)) => v as f32, _ => 1.0 };
+                let pg = match self.evaluate_inner(g) { ExecResult::Value(RelType::Float(v)) => v as f32, ExecResult::Value(RelType::Int(v)) => v as f32, _ => 1.0 };
+                let pb = match self.evaluate_inner(b) { ExecResult::Value(RelType::Float(v)) => v as f32, ExecResult::Value(RelType::Int(v)) => v as f32, _ => 1.0 };
+                let pi = match self.evaluate_inner(intensity) { ExecResult::Value(RelType::Float(v)) => v as f32, ExecResult::Value(RelType::Int(v)) => v as f32, _ => 1.0 };
+
                 self.point_lights.push(PointLightData {
-                    x: f(x), y: f(y), z: f(z),
-                    r: f(r), g: f(g), b: f(b),
-                    intensity: f(intensity),
+                    x: px, y: py, z: pz,
+                    r: pr, g: pg, b: pb,
+                    intensity: pi,
                 });
                 ExecResult::Value(RelType::Void)
             }
@@ -3682,6 +3683,8 @@ impl ExecutionEngine {
                                 WindowEvent::KeyboardInput { event: key_ev, .. } => {
                                     let is_pressed =
                                         key_ev.state == winit::event::ElementState::Pressed;
+                                    
+                                    // 1. Update Keyboard Buffer
                                     if let winit::keyboard::Key::Named(k) = &key_ev.logical_key {
                                         if is_pressed
                                             && let winit::keyboard::NamedKey::Backspace = k
@@ -3698,12 +3701,17 @@ impl ExecutionEngine {
                                                 self.engine.keyboard_buffer.lock().unwrap();
                                             kb.push_str(c);
                                         }
-                                        match c.as_str() {
-                                            "w" | "W" => self.engine.input_w = is_pressed,
-                                            "a" | "A" => self.engine.input_a = is_pressed,
-                                            "s" | "S" => self.engine.input_s = is_pressed,
-                                            "d" | "D" => self.engine.input_d = is_pressed,
-                                            " " => self.engine.input_space = is_pressed,
+                                    }
+
+                                    // 2. Update FPS Controls (Physical Keys)
+                                    if let winit::keyboard::PhysicalKey::Code(code) = key_ev.physical_key {
+                                        match code {
+                                            winit::keyboard::KeyCode::KeyW => self.engine.input_w = is_pressed,
+                                            winit::keyboard::KeyCode::KeyA => self.engine.input_a = is_pressed,
+                                            winit::keyboard::KeyCode::KeyS => self.engine.input_s = is_pressed,
+                                            winit::keyboard::KeyCode::KeyD => self.engine.input_d = is_pressed,
+                                            winit::keyboard::KeyCode::Space => self.engine.input_space = is_pressed,
+                                            winit::keyboard::KeyCode::ShiftLeft => self.engine.input_shift = is_pressed,
                                             _ => {}
                                         }
                                     }
@@ -3807,27 +3815,10 @@ impl ExecutionEngine {
                                         }
                                     }
                                 }
-                                WindowEvent::KeyboardInput { event, .. } => {
-                                    if let winit::keyboard::PhysicalKey::Code(code) = event.physical_key {
-                                        let is_pressed = event.state == winit::event::ElementState::Pressed;
-                                        match code {
-                                            winit::keyboard::KeyCode::KeyW => self.engine.input_w = is_pressed,
-                                            winit::keyboard::KeyCode::KeyA => self.engine.input_a = is_pressed,
-                                            winit::keyboard::KeyCode::KeyS => self.engine.input_s = is_pressed,
-                                            winit::keyboard::KeyCode::KeyD => self.engine.input_d = is_pressed,
-                                            winit::keyboard::KeyCode::Space => self.engine.input_space = is_pressed,
-                                            winit::keyboard::KeyCode::ShiftLeft => self.engine.input_shift = is_pressed,
-                                            _ => {}
-                                        }
-                                    }
-                                }
                                 _ => {}
                             }
                         }
-
-                            }
-                        }
-
+                        
                         fn device_event(
                             &mut self,
                             _event_loop: &ActiveEventLoop,
@@ -4098,6 +4089,7 @@ impl ExecutionEngine {
                             if has_voxels {
                                 self.engine.ensure_voxel_pipeline();
                             }
+                            self.engine.ensure_canvas_mesh_pipeline(); // Pre-initialize to avoid borrow conflicts
 
                             if let (
                                 Some(ctx),
@@ -4105,7 +4097,7 @@ impl ExecutionEngine {
                                 Some(renderer),
                                 Some(device),
                                 Some(queue),
-                                Some(_surface),
+                                Some(surface),
                                 Some(window),
                                 Some(config),
                                 depth_view_opt,
@@ -4143,8 +4135,8 @@ impl ExecutionEngine {
                                         .create_view(&wgpu::TextureViewDescriptor::default());
                                     
                                     // Sprint 70: Store for shared use across nodes
+                                    self.engine.current_canvas_view = Some(frame.texture.create_view(&wgpu::TextureViewDescriptor::default()));
                                     self.engine.current_canvas_frame = Some(frame);
-                                    self.engine.current_canvas_view = Some(view.clone());
                                     
                                     // Make view available locally for this loop too
                                     let view = view;
@@ -4295,23 +4287,19 @@ impl ExecutionEngine {
                                                 0,
                                                 0..self.engine.voxel_instances.len() as u32,
                                             );
-                                        }
                                     }
+                                }
 
-                                        }
-                                    }
+                                // Sprint 71: Flush Hardware Instancing Queues
+                                for (&mesh_id, instances) in &self.engine.instance_queues {
+                                    if instances.is_empty() { continue; }
+                                    let mesh_idx = mesh_id as usize;
+                                    if mesh_idx >= self.engine.meshes.len() { continue; }
 
-                                    // Sprint 71: Flush Hardware Instancing Queues
-                                    for (&mesh_id, instances) in &self.engine.instance_queues {
-                                        if instances.is_empty() { continue; }
-                                        let mesh_idx = mesh_id as usize;
-                                        if mesh_idx >= self.engine.meshes.len() { continue; }
-
-                                        self.engine.ensure_canvas_mesh_pipeline();
-                                        if let (Some(pipeline), Some(device), Some(view_proj)) = (
-                                            &self.engine.canvas_mesh_pipeline,
-                                            &self.engine.device,
-                                            self.engine.camera3d_view_proj
+                                    if let (Some(pipeline), Some(device), Some(view_proj)) = (
+                                        &self.engine.canvas_mesh_pipeline,
+                                        &self.engine.device,
+                                        self.engine.camera3d_view_proj
                                         ) {
                                             // Create instance buffer
                                             let instance_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -4392,7 +4380,6 @@ impl ExecutionEngine {
                                     if let (Some(m_id), Some(t_id)) = (self.engine.weapon_mesh, self.engine.weapon_tex) {
                                         let m_idx = m_id as usize;
                                         if m_idx < self.engine.meshes.len() {
-                                            self.engine.ensure_canvas_mesh_pipeline();
                                             if let (Some(pipeline), Some(device), Some(view_proj)) = (
                                                 &self.engine.canvas_mesh_pipeline,
                                                 &self.engine.device,
