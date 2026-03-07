@@ -682,6 +682,12 @@ impl Parser {
             "FileRead" => Node::FileRead(Box::new(args.remove(0))),
             "FSRead" => Node::FSRead(Box::new(args.remove(0))),
             "FSWrite" => Node::FSWrite(Box::new(args.remove(0)), Box::new(args.remove(0))),
+            "CheckCollision" => Node::CheckCollision {
+                a_min: Box::new(args.remove(0)),
+                a_max: Box::new(args.remove(0)),
+                b_min: Box::new(args.remove(0)),
+                b_max: Box::new(args.remove(0)),
+            },
             _ => Node::Call(name.to_string(), args), // Default to local Call
         }
     }

@@ -12,3 +12,4 @@ pub mod parser;
 pub mod test_lib;
 pub mod validator;
 pub mod vm;
+pub mod math;

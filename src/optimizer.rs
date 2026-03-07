@@ -203,6 +203,9 @@ pub fn count_nodes(node: &Node) -> usize {
         Node::WeaponViewModel { mesh, tex } => {
             count += count_nodes(mesh) + count_nodes(tex);
         }
+        Node::CheckCollision { a_min, a_max, b_min, b_max } => {
+            count += count_nodes(a_min) + count_nodes(a_max) + count_nodes(b_min) + count_nodes(b_max);
+        }
     }
     count
 }
@@ -503,6 +506,12 @@ pub fn optimize(node: Node) -> Node {
         Node::WeaponViewModel { mesh, tex } => Node::WeaponViewModel {
             mesh: Box::new(optimize(*mesh)),
             tex: Box::new(optimize(*tex)),
+        },
+        Node::CheckCollision { a_min, a_max, b_min, b_max } => Node::CheckCollision {
+            a_min: Box::new(optimize(*a_min)),
+            a_max: Box::new(optimize(*a_max)),
+            b_min: Box::new(optimize(*b_min)),
+            b_max: Box::new(optimize(*b_max)),
         },
     }
 }

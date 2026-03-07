@@ -1,0 +1,14 @@
+am = [0.0, 0.0, 0.0]
+ax = [1.0, 1.0, 1.0]
+bm = [0.5, 0.5, 0.5]
+bx = [1.5, 1.5, 1.5]
+
+res1 = CheckCollision(am, ax, bm, bx)
+Print("Collision 1 (Expected 1):")
+Print(res1)
+
+cm = [2.0, 2.0, 2.0]
+cx = [3.0, 3.0, 3.0]
+res2 = CheckCollision(am, ax, cm, cx)
+Print("Collision 2 (Expected 0):")
+Print(res2)

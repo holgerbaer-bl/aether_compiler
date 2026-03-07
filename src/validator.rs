@@ -360,6 +360,12 @@ impl Validator {
                 self.check_node(mesh);
                 self.check_node(tex);
             }
+            Node::CheckCollision { a_min, a_max, b_min, b_max } => {
+                self.check_node(a_min);
+                self.check_node(a_max);
+                self.check_node(b_min);
+                self.check_node(b_max);
+            }
         }
     }
 }

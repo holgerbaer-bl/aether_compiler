@@ -57,6 +57,16 @@ impl ExecutionEngine {
             }
             
             Node::StringLiteral(v) => ExecResult::Value(RelType::Str(v.clone())),
+            Node::ArrayCreate(nodes) => {
+                let mut vals = Vec::with_capacity(nodes.len());
+                for n in nodes {
+                    match self.evaluate_inner(n) {
+                        ExecResult::Value(v) => vals.push(v),
+                        err => return err,
+                    }
+                }
+                ExecResult::Value(RelType::Array(vals))
+            }
             Node::Time | Node::GlobalTime => ExecResult::Value(RelType::Float(self.startup_time.elapsed().as_secs_f64())),
             
             Node::Sub(l, r) => self.do_math(l, '-', r),
@@ -137,6 +147,23 @@ impl ExecutionEngine {
                 ExecResult::ReturnBlockInfo(v)
             }
 
+            Node::CheckCollision { a_min, a_max, b_min, b_max } => {
+                let am = match self.evaluate_inner(a_min) { ExecResult::Value(v) => v, err => return err };
+                let ax = match self.evaluate_inner(a_max) { ExecResult::Value(v) => v, err => return err };
+                let bm = match self.evaluate_inner(b_min) { ExecResult::Value(v) => v, err => return err };
+                let bx = match self.evaluate_inner(b_max) { ExecResult::Value(v) => v, err => return err };
+                
+                let v_am = if let Some(v) = self.to_vec3(am) { v } else { return ExecResult::Fault("a_min must be [x, y, z]".into()) };
+                let v_ax = if let Some(v) = self.to_vec3(ax) { v } else { return ExecResult::Fault("a_max must be [x, y, z]".into()) };
+                let v_bm = if let Some(v) = self.to_vec3(bm) { v } else { return ExecResult::Fault("b_min must be [x, y, z]".into()) };
+                let v_bx = if let Some(v) = self.to_vec3(bx) { v } else { return ExecResult::Fault("b_max must be [x, y, z]".into()) };
+                
+                let aabb_a = crate::math::AABB::new(v_am, v_ax);
+                let aabb_b = crate::math::AABB::new(v_bm, v_bx);
+                
+                ExecResult::Value(RelType::Int(if aabb_a.intersects(&aabb_b) { 1 } else { 0 }))
+            }
+
             _ => self.evaluate_extra(node),
         }
     }
@@ -189,5 +216,17 @@ impl ExecutionEngine {
             _ => return ExecResult::Fault(format!("Unknown comparison: {}", op)),
         };
         ExecResult::Value(res)
+    }
+
+    fn to_vec3(&self, val: RelType) -> Option<[f32; 3]> {
+        if let RelType::Array(arr) = val {
+            if arr.len() >= 3 {
+                let x = match arr[0] { RelType::Float(f) => f as f32, RelType::Int(i) => i as f32, _ => 0.0 };
+                let y = match arr[1] { RelType::Float(f) => f as f32, RelType::Int(i) => i as f32, _ => 0.0 };
+                let z = match arr[2] { RelType::Float(f) => f as f32, RelType::Int(i) => i as f32, _ => 0.0 };
+                return Some([x, y, z]);
+            }
+        }
+        None
     }
 }
