@@ -97,9 +97,15 @@ pub enum Node {
         fov: Box<Node>,
     },
     Mesh3D { primitive: Box<Node>, material: Box<Node> }, // primitive: "cube"|"sphere"|"plane"
+    PointLight3D {
+        x: Box<Node>, y: Box<Node>, z: Box<Node>,
+        r: Box<Node>, g: Box<Node>, b: Box<Node>,
+        intensity: Box<Node>,
+    },
     Material3D {
         r: Box<Node>, g: Box<Node>, b: Box<Node>, a: Box<Node>,
         metallic: Box<Node>, roughness: Box<Node>,
+        texture_id: Option<Box<Node>>,
     },
 
     // Sprint 60: Async Connectivity

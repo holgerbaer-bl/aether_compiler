@@ -161,6 +161,34 @@ pub struct VoxelInstance {
     pub instance_pos_and_id: [f32; 4],
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct PointLightData {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+    pub intensity: f32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct PointLightStruct {
+    pub pos: [f32; 4],   // xyz, pad
+    pub color: [f32; 4], // rgb, intensity
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct MeshUniforms {
+    pub view_proj: [[f32; 4]; 4],
+    pub material: [f32; 4],
+    pub pbr: [f32; 4],
+    pub camera_pos: [f32; 4],
+    pub lights: [PointLightStruct; 4],
+}
+
 pub struct ExecutionEngine {
     pub memory: HashMap<String, RelType>,
     pub event_loop: Option<EventLoop<()>>,
@@ -170,6 +198,7 @@ pub struct ExecutionEngine {
     pub queue: Option<wgpu::Queue>,
     pub config: Option<wgpu::SurfaceConfiguration>,
     pub depth_texture_view: Option<wgpu::TextureView>,
+    pub current_canvas_view: Option<wgpu::TextureView>,
     pub shaders: Vec<wgpu::ShaderModule>,
     pub render_pipelines: HashMap<usize, wgpu::RenderPipeline>,
     pub native_modules: Vec<Box<dyn NativeModule>>,
@@ -218,6 +247,7 @@ pub struct ExecutionEngine {
         wgpu::BindGroup,
         wgpu::BindGroupLayout,
     )>,
+    pub point_lights: Vec<PointLightData>,
 
     // UI & Text state
     pub glyph_brush: Option<wgpu_glyph::GlyphBrush<()>>,
@@ -294,9 +324,10 @@ impl ExecutionEngine {
             native_modules: Vec::new(),
             camera_active: false,
             camera_pos: [0.0, 1.0, 0.0],
-            camera_yaw: 0.0,
+            camera_yaw: -90.0,
             camera_pitch: 0.0,
-            camera_fov: 75.0,
+            camera_fov: 60.0,
+            point_lights: Vec::new(),
             input_w: false,
             input_a: false,
             input_s: false,
@@ -1360,21 +1391,36 @@ impl ExecutionEngine {
             // ─── Sprint 68: Native 3D/2D Render Scene Graph ──────────────────────────
 
             /// Material3D — stores material params so the next Mesh3D draw uses them.
-            Node::Material3D { r, g, b, a, metallic, roughness } => {
-                let ef = |res: ExecResult| -> f32 {
-                    match res {
-                        ExecResult::Value(RelType::Float(f)) => f as f32,
-                        ExecResult::Value(RelType::Int(i)) => i as f32,
-                        _ => 0.0,
-                    }
+            Node::Material3D { r, g, b, a, metallic, roughness, texture_id } => {
+                let f = |n| match self.evaluate_inner(n) {
+                    ExecResult::Value(RelType::Float(v)) => v as f32,
+                    ExecResult::Value(RelType::Int(v)) => v as f32,
+                    _ => 1.0,
                 };
-                let rv = ef(self.evaluate_inner(r));
-                let gv = ef(self.evaluate_inner(g));
-                let bv = ef(self.evaluate_inner(b));
-                let av = ef(self.evaluate_inner(a));
-                let mv = ef(self.evaluate_inner(metallic));
-                let rv2 = ef(self.evaluate_inner(roughness));
-                self.canvas_material = [rv, gv, bv, av, mv, rv2, 0.0, 0.0];
+                let rv = f(r); let gv = f(g); let bv = f(b); let av = f(a);
+                let mv = f(metallic); let rov = f(roughness);
+                let tid = if let Some(t_node) = texture_id {
+                    match self.evaluate_inner(t_node) {
+                        ExecResult::Value(RelType::Int(i)) => i as f32,
+                        _ => -1.0,
+                    }
+                } else { -1.0 };
+                self.canvas_material = [rv, gv, bv, av, mv, rov, tid, 0.0];
+                ExecResult::Value(RelType::Void)
+            }
+
+            /// PointLight3D - adds a point light to the scene.
+            Node::PointLight3D { x, y, z, r, g, b, intensity } => {
+                let f = |n| match self.evaluate_inner(n) {
+                    ExecResult::Value(RelType::Float(v)) => v as f32,
+                    ExecResult::Value(RelType::Int(v)) => v as f32,
+                    _ => 0.0,
+                };
+                self.point_lights.push(PointLightData {
+                    x: f(x), y: f(y), z: f(z),
+                    r: f(r), g: f(g), b: f(b),
+                    intensity: f(intensity),
+                });
                 ExecResult::Value(RelType::Void)
             }
 
