@@ -206,6 +206,7 @@ pub enum Node {
     Block(Vec<Node>),
     Return(Box<Node>),
     Import(String),
+    AddWorldAABB { min: Box<Node>, max: Box<Node> },
     CheckCollision { a_min: Box<Node>, a_max: Box<Node>, b_min: Box<Node>, b_max: Box<Node> },
 }
 

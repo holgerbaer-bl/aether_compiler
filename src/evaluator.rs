@@ -318,7 +318,8 @@ impl ExecutionEngine {
             Node::UIGrid(_, _, _) | Node::UIScrollArea(_, _) | Node::InitCamera(_) |
             Node::DrawVoxelGrid(_) | Node::LoadTextureAtlas(_, _) | Node::LoadSample(_, _) |
             Node::PlaySample(_, _, _) | Node::InitVoxelMap | Node::SetVoxel(_, _, _, _) |
-            Node::EnableInteraction(_) | Node::EnablePhysics(_) | Node::Import(_) => self.evaluate_extra(node),
+            Node::EnableInteraction(_) | Node::EnablePhysics(_) | Node::Import(_) |
+            Node::AddWorldAABB { .. } => self.evaluate_extra(node),
         }
     }
 
@@ -372,7 +373,7 @@ impl ExecutionEngine {
         ExecResult::Value(res)
     }
 
-    fn to_vec3(&self, val: RelType) -> Option<[f32; 3]> {
+    pub(crate) fn to_vec3(&self, val: RelType) -> Option<[f32; 3]> {
         if let RelType::Array(arr) = val {
             if arr.len() >= 3 {
                 let x = match arr[0] { RelType::Float(f) => f as f32, RelType::Int(i) => i as f32, _ => 0.0 };

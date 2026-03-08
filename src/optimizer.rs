@@ -206,6 +206,9 @@ pub fn count_nodes(node: &Node) -> usize {
         Node::CheckCollision { a_min, a_max, b_min, b_max } => {
             count += count_nodes(a_min) + count_nodes(a_max) + count_nodes(b_min) + count_nodes(b_max);
         }
+        Node::AddWorldAABB { min, max } => {
+            count += count_nodes(min) + count_nodes(max);
+        }
     }
     count
 }
@@ -512,6 +515,10 @@ pub fn optimize(node: Node) -> Node {
             a_max: Box::new(optimize(*a_max)),
             b_min: Box::new(optimize(*b_min)),
             b_max: Box::new(optimize(*b_max)),
+        },
+        Node::AddWorldAABB { min, max } => Node::AddWorldAABB {
+            min: Box::new(optimize(*min)),
+            max: Box::new(optimize(*max)),
         },
     }
 }

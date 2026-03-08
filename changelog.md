@@ -5,6 +5,19 @@
 
 ---
 
+## [v0.77.0] - Sprint 77: Unified Physics (The Collision Sprint)
+Unified the physics engine by integrating generic AABB (Axis-Aligned Bounding Box) collision logic directly into the FPS camera movement, replacing the previous hardcoded voxel-only restriction.
+
+### Added
+- **`Node::AddWorldAABB`**: New AST node allowing scripts to register arbitrary physical barriers and invisible collision volumes.
+- **Unified Collision Resolution**: Re-engineered camera movement in `window.rs` to check for intersections against all registered world boxes.
+- **Dynamic Camera AABB**: The player's environment presence is now defined by a standard bounding volume (AABB), ensuring consistent interaction with custom geometry.
+
+### Fixed
+- **Physics Disconnect**: Resolved the gap between the AST `CheckCollision` system and the actual hardware camera movement.
+
+---
+
 ## [v0.76.0] - Sprint 76: Async, Natives & Security (The Hardening)
 Completed the connectivity for asynchronous operations and native modules while introducing a strict security sandbox.
 

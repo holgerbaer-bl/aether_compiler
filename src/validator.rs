@@ -366,6 +366,10 @@ impl Validator {
                 self.check_node(b_min);
                 self.check_node(b_max);
             }
+            Node::AddWorldAABB { min, max } => {
+                self.check_node(min);
+                self.check_node(max);
+            }
         }
     }
 }

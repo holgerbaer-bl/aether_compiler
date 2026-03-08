@@ -220,6 +220,8 @@ pub struct ExecutionEngine {
     pub weapon_mesh: Option<i64>,
     pub weapon_tex: Option<i64>,
     pub weapon_sway: (f32, f32),
+    pub world_aabbs: Vec<crate::math::AABB>,
+    pub camera_aabb_offset: crate::math::AABB,
 }
 
 pub enum Action { UpdateData(String, RelType) }
@@ -314,6 +316,8 @@ impl ExecutionEngine {
             canvas_material: [1.0, 1.0, 1.0, 1.0, 0.0, 0.5, 0.0, 0.0],
             sprite2d_queue: Vec::new(), transform2d_stack: Vec::new(),
             weapon_mesh: None, weapon_tex: None, weapon_sway: (0.0, 0.0),
+            world_aabbs: Vec::new(),
+            camera_aabb_offset: crate::math::AABB::new([-0.3, -1.6, -0.3], [0.3, 0.2, 0.3]),
             bridge: Box::new(CoreBridge),
         };
         let (tx, rx) = std::sync::mpsc::channel();
@@ -365,6 +369,16 @@ impl ExecutionEngine {
             Node::EnablePhysics(b) => {
                 if let ExecResult::Value(RelType::Bool(v)) = self.evaluate(b) { self.physics_enabled = v; }
                 ExecResult::Value(RelType::Void)
+            }
+            Node::AddWorldAABB { min, max } => {
+                let v_min = match self.evaluate(min) { ExecResult::Value(v) => self.to_vec3(v), _ => None };
+                let v_max = match self.evaluate(max) { ExecResult::Value(v) => self.to_vec3(v), _ => None };
+                if let (Some(mi), Some(ma)) = (v_min, v_max) {
+                    self.world_aabbs.push(crate::math::AABB::new(mi, ma));
+                    ExecResult::Value(RelType::Void)
+                } else {
+                    ExecResult::Fault("AddWorldAABB expects two arrays of 3 floats".into())
+                }
             }
             Node::EnableInteraction(b) => {
                 if let ExecResult::Value(RelType::Bool(v)) = self.evaluate(b) { self.interaction_enabled = v; }

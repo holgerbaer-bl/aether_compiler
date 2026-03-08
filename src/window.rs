@@ -132,12 +132,36 @@ impl<'a> ApplicationHandler for KnotenApp<'a> {
                 } else {
                     self.engine.is_grounded = false;
                 }
-                
+
+                // AABB Collision Check Helper
+                let has_aabb_collision = |pos: [f32; 3], engine: &ExecutionEngine| -> bool {
+                    let mut cam_aabb = engine.camera_aabb_offset;
+                    cam_aabb.min[0] += pos[0];
+                    cam_aabb.min[1] += pos[1];
+                    cam_aabb.min[2] += pos[2];
+                    cam_aabb.max[0] += pos[0];
+                    cam_aabb.max[1] += pos[1];
+                    cam_aabb.max[2] += pos[2];
+                    for world_aabb in &engine.world_aabbs {
+                        if cam_aabb.intersects(world_aabb) {
+                            return true;
+                        }
+                    }
+                    false
+                };
+
                 let try_x = new_pos[0] + dx;
                 let try_z = new_pos[2] + dz;
                 let ty = (new_pos[1] - 0.5).floor() as i64;
-                if !self.engine.voxel_map.contains_key(&[try_x.floor() as i64, ty, check_z]) { new_pos[0] = try_x; }
-                if !self.engine.voxel_map.contains_key(&[check_x, ty, try_z.floor() as i64]) { new_pos[2] = try_z; }
+                
+                // Voxel Check + AABB Check for X
+                if !self.engine.voxel_map.contains_key(&[try_x.floor() as i64, ty, check_z]) && !has_aabb_collision([try_x, new_pos[1], new_pos[2]], self.engine) {
+                    new_pos[0] = try_x;
+                }
+                // Voxel Check + AABB Check for Z
+                if !self.engine.voxel_map.contains_key(&[check_x, ty, try_z.floor() as i64]) && !has_aabb_collision([new_pos[0], new_pos[1], try_z], self.engine) {
+                    new_pos[2] = try_z;
+                }
                 self.engine.camera_pos = new_pos;
             } else {
                 self.engine.camera_pos[0] += dx;

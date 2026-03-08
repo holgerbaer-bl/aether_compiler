@@ -318,3 +318,31 @@ Manual handle release (e.g., calling `registry_release` or `registry_free` manua
 - **Don't** try to manually count references or call cleanup functions. 
 - **Do** trust the engine to clean up handles when variables are no longer used.
 - **Example**: If you define `h = registry_create_window(...)` inside a function, `h` will be released automatically when that function returns.
+
+---
+
+## Sprint 77: Unified Physics System
+
+To create physical barriers in the player's environment, AI agents must register AABB (Axis-Aligned Bounding Box) volumes into the world.
+
+### 1. `AddWorldAABB` Node
+Use this node to define an immovable physical collision box.
+
+**AST Signature:**
+```json
+{
+  "AddWorldAABB": {
+    "min": { "ArrayCreate": [{ "FloatLiteral": -1.0 }, { "FloatLiteral": 0.0 }, { "FloatLiteral": -1.0 }] },
+    "max": { "ArrayCreate": [{ "FloatLiteral": 1.0 }, { "FloatLiteral": 2.0 }, { "FloatLiteral": 1.0 }] }
+  }
+}
+```
+
+### 2. Collision Resolution
+- The FPS camera carries a default AABB (roughly human-sized).
+- Movement is restricted: the engine prevents the camera from entering any volume defined by `AddWorldAABB`.
+- Voxel maps still provide collision, but `AddWorldAABB` allows for arbitrary geometric collision (walls, invisible barriers, etc.).
+
+### AI Best Practice:
+- **Designating Barriers**: When generating a scene, use `AddWorldAABB` for all static geometry that the player should not walk through.
+- **Dynamic Updates**: `AddWorldAABB` is currently static (once added, it stays). To create dynamic barriers, wait for future engine updates or move the player's camera manually if teleportation is needed.
