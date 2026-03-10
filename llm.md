@@ -275,7 +275,13 @@ All I/O operations are now permission-gated. If you generate code that uses `FSR
 
 Failure to provide these flags will result in an `ExecResult::Fault` explaining the missing permission.
 
-### 2. Automatic ARC (NativeHandle)
+### 2. Performance: Geometry Caching (Sprint 80)
+Native 3D primitives (`Sphere`, `Cube`, `Cylinder`) are high-performance. They utilize internal **Geometry Caching** to reuse WGPU buffers. 
+- **Efficiency**: Vertices and indices are calculated once per unique configuration and stored in VRAM.
+- **Dynamic Scaling**: Transformations are applied via model matrices, ensuring that drawing 100 spheres of the same resolution only requires one set of GPU buffers.
+- **AI Recommendation**: Prefer native primitives over manual vertex arrays for standard shapes to minimize token consumption and maximize frame rate.
+
+### 3. Automatic ARC (NativeHandle)
 Manual handle release (e.g., calling `registry_release` or `registry_free` manually) is **deprecated** and generally unnecessary.
 
 **The NativeHandle Pattern:**

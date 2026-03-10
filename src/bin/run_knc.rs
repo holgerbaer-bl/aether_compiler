@@ -3,6 +3,7 @@ use std::env;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use std::sync::Arc;
 
 // Embedded at compile-time: absolute path to the knoten_core library source.
 const KNOTEN_CORE_PATH: &str = env!("CARGO_MANIFEST_DIR");
@@ -121,18 +122,27 @@ fn run() {
         }
     }
 
-    if transpile {
-        let rs_code = knoten_core::compiler::codegen::generate_rust_code(&ast);
-        std::fs::write("output.rs", &rs_code).expect("Failed to write output.rs");
-        println!("\nTranspiled successfully to output.rs:");
-        println!("---------------------------------------");
-        println!("{}", rs_code);
-        return;
-    }
+    // ── Pre-Execution Setup ──────────────────────────────────────────
+    let (tx, rx) = std::sync::mpsc::channel();
+    knoten_core::natives::registry::set_render_channel(tx);
 
-    let result = engine.execute(&ast);
+    let ast_arc = Arc::new(ast);
+    let ast_for_thread = ast_arc.clone();
+    let mut thread_engine = engine; // Move the engine with set permissions
 
-    println!("\nExecution Finished.\nResult: {}", result);
+    std::thread::Builder::new()
+        .stack_size(8 * 1024 * 1024)
+        .spawn(move || {
+            let result = thread_engine.execute(&ast_for_thread);
+            println!("\nExecution Finished.\nResult: {}", result);
+        })
+        .expect("Failed to spawn executor thread");
+
+    // ── Main Thread Loop ─────────────────────────────────────────────
+    use winit::event_loop::EventLoop;
+    let event_loop = EventLoop::new().expect("Failed to create event loop");
+    let mut app = knoten_core::window::KnotenApp::new(rx);
+    let _ = event_loop.run_app(&mut app);
 }
 
 /// Full one-click build pipeline:

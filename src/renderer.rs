@@ -5,8 +5,8 @@ use std::sync::Arc;
 impl ExecutionEngine {
     pub fn ensure_canvas_mesh_pipeline(&mut self) {
         if self.canvas_mesh_pipeline.is_some() { return; }
-        let (device, config) = match (&self.device, &self.config) {
-            (Some(d), Some(c)) => (d, c),
+        let (device, format) = match (&self.device, &self.surface_format) {
+            (Some(d), Some(f)) => (d, f),
             _ => return,
         };
 
@@ -86,7 +86,7 @@ impl ExecutionEngine {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
+                    format: *format,
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],

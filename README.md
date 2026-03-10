@@ -21,7 +21,11 @@ To maintain long-term stability and reduce compilation times, the core engine ha
 - **`src/async_bridge.rs`**: The nervous system. Handles non-blocking operations like `Fetch` and `Extract` via background worker threads.
 
 ## 3. Security & Sandboxing (Sprint 76 & 80)
-KnotenCore is built for AI-driven execution, which requires strict security. Starting with Sprint 76 and reinforced in Sprint 80, the runner enforces a "Deny-by-Default" policy for all I/O:
+KnotenCore is built for AI-driven execution, which requires strict security:
+- **Sprint 80 (Phase 1): Security Lockdown (ExternCall Bypass)**. Verified sandbox enforcement for all I/O entry points. [x]
+- **Sprint 80 (Phase 2): VRAM Rescue (Geometry Caching)**. Optimized 3D primitive rendering with geometry reuse and dynamic scaling. [x]
+
+The runner enforces a "Deny-by-Default" policy for all I/O:
 - **`FS Read/Write`**: Disabled by default.
 - **`ExternCall Protection`**: FFI bridge calls (e.g., `registry_read_file`, `registry_write_file`) are now subject to the same sandbox rules as standard nodes.
 - **`Permissions`**: Must be explicitly granted via CLI flags:

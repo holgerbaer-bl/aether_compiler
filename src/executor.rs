@@ -141,12 +141,9 @@ pub struct MeshUniforms {
 
 pub struct ExecutionEngine {
     pub memory: HashMap<String, RelType>,
-    pub event_loop: Option<EventLoop<()>>,
-    pub window: Option<Arc<Window>>,
-    pub surface: Option<wgpu::Surface<'static>>,
-    pub device: Option<wgpu::Device>,
-    pub queue: Option<wgpu::Queue>,
-    pub config: Option<wgpu::SurfaceConfiguration>,
+    pub device: Option<Arc<wgpu::Device>>,
+    pub queue: Option<Arc<wgpu::Queue>>,
+    pub surface_format: Option<wgpu::TextureFormat>,
     pub depth_texture_view: Option<wgpu::TextureView>,
     pub current_canvas_view: Option<wgpu::TextureView>,
     pub current_canvas_frame: Option<wgpu::SurfaceTexture>,
@@ -191,13 +188,7 @@ pub struct ExecutionEngine {
     pub instance_queues: HashMap<i64, Vec<InstanceData>>,
     pub mouse_grab_enabled: bool,
     pub mouse_delta: (f32, f32),
-    pub glyph_brush: Option<wgpu_glyph::GlyphBrush<()>>,
-    pub staging_belt: Option<wgpu::util::StagingBelt>,
     pub keyboard_buffer: Arc<Mutex<String>>,
-    pub egui_ctx: Option<egui::Context>,
-    pub egui_state: Option<egui_winit::State>,
-    pub egui_renderer: Option<egui_wgpu::Renderer>,
-    pub egui_ui_ptr: Option<*mut egui::Ui>,
     pub voices: Option<Arc<Mutex<[VoiceState; 4]>>>,
     pub stream_samples: Option<Arc<Mutex<Vec<f32>>>>,
     pub stream_pos: Option<Arc<Mutex<usize>>>,
@@ -223,6 +214,11 @@ pub struct ExecutionEngine {
     pub world_aabbs: Vec<crate::math::AABB>,
     pub camera_aabb_offset: crate::math::AABB,
 }
+
+// SAFETY: ExecutionEngine is moved to a background thread and stays there.
+// The non-Send fields (audio streams) are only accessed by the engine itself.
+unsafe impl Send for ExecutionEngine {}
+unsafe impl Sync for ExecutionEngine {}
 
 pub enum Action { UpdateData(String, RelType) }
 
@@ -293,8 +289,8 @@ impl ExecutionEngine {
 
     fn default_new() -> Self {
         let mut engine = Self {
-            memory: HashMap::new(), event_loop: None, window: None, surface: None,
-            device: None, queue: None, config: None, depth_texture_view: None,
+            memory: HashMap::new(),
+            device: None, queue: None, surface_format: None, depth_texture_view: None,
             shaders: Vec::new(), render_pipelines: HashMap::new(), native_modules: Vec::new(),
             camera_active: false, camera_pos: [0.0, 1.0, 0.0], camera_yaw: -90.0, camera_pitch: 0.0, camera_fov: 60.0,
             point_lights: Vec::new(), current_canvas_frame: None, current_canvas_view: None,
@@ -305,9 +301,12 @@ impl ExecutionEngine {
             voxel_ubo: None, voxel_map: HashMap::new(), voxel_map_active: false, voxel_map_dirty: false,
             interaction_enabled: false, physics_enabled: false, velocity_y: 0.0, is_grounded: false,
             voxel_instance_buffer: None, mesh_cache: HashMap::new(), frame_encoder: None, mesh_ubo: None, meshes: Vec::new(), textures: Vec::new(), instance_queues: HashMap::new(),
-            mouse_grab_enabled: false, mouse_delta: (0.0, 0.0), glyph_brush: None, staging_belt: None,
-            keyboard_buffer: Arc::new(Mutex::new(String::new())), egui_ctx: None, egui_state: None,
-            egui_renderer: None, egui_ui_ptr: None, voices: None, stream_samples: None, stream_pos: None,
+            mouse_grab_enabled: false,
+            mouse_delta: (0.0, 0.0),
+            keyboard_buffer: Arc::new(Mutex::new(String::new())),
+            voices: None,
+            stream_samples: None,
+            stream_pos: None,
             audio_stream: None, audio_stream_handle: None, samples: HashMap::new(), async_bridge: Some(crate::async_bridge::AsyncBridge::new()),
             action_tx: None, action_rx: None, permission_fault: None, ui_dirty: false,
             permissions: AgentPermissions::default(),
@@ -331,7 +330,7 @@ impl ExecutionEngine {
 
     pub fn evaluate_extra(&mut self, node: &Node) -> ExecResult {
         match node {
-            Node::PollEvents(body) => { self.run_event_loop(body); ExecResult::Value(RelType::Void) }
+            Node::PollEvents(body) => { self.evaluate(body) }
             Node::Print(expr) => {
                 match self.evaluate(expr) {
                     ExecResult::Value(v) => { println!("{}", v); ExecResult::Value(RelType::Void) }

@@ -1,6 +1,6 @@
 use crate::executor::{ExecResult, RelType, AgentPermissions};
 
-pub trait BridgeModule {
+pub trait BridgeModule: Send {
     fn handle(&self, module: &str, function: &str, args: &[RelType], permissions: &AgentPermissions) -> Option<ExecResult>;
 }
 
@@ -672,7 +672,7 @@ impl BridgeModule for CoreBridge {
                                     get_float(&args[7]),
                                 ) {
                                     crate::natives::registry::registry_draw_sphere(
-                                        *win, *tex, r, rings, sectors, x, y, z,
+                                        *win, *tex, r, rings as i32, sectors as i32, x, y, z,
                                     );
                                     return Some(ExecResult::Value(RelType::Void));
                                 }
@@ -741,7 +741,7 @@ impl BridgeModule for CoreBridge {
                                 get_float(&args[7]),
                             ) {
                                 crate::natives::registry::registry_draw_cylinder(
-                                    *win, *tex, r, h, s, x, y, z,
+                                    *win, *tex, r, h, s as i32, x, y, z,
                                 );
                                 return Some(ExecResult::Value(RelType::Void));
                             }
