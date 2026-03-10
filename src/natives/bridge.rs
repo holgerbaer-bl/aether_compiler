@@ -623,6 +623,46 @@ impl BridgeModule for CoreBridge {
                         node: "Native::Bridge::registry_draw_quad_3d".into()
                     })
                 }
+                "registry_draw_sphere" => {
+                    if args.len() == 8 {
+                        let get_float = |arg: &RelType| -> Option<f32> {
+                            match arg {
+                                RelType::Float(f) => Some(*f as f32),
+                                RelType::Int(i) => Some(*i as f32),
+                                _ => None,
+                            }
+                        };
+                        let get_int = |arg: &RelType| -> Option<i64> {
+                            match arg {
+                                RelType::Int(i) => Some(*i),
+                                _ => None,
+                            }
+                        };
+
+                        if let RelType::Handle(crate::executor::NativeHandle(win)) = &args[0] {
+                            if let RelType::Handle(crate::executor::NativeHandle(tex)) = &args[1] {
+                                if let (Some(r), Some(rings), Some(sectors), Some(x), Some(y), Some(z)) = (
+                                    get_float(&args[2]),
+                                    get_int(&args[3]),
+                                    get_int(&args[4]),
+                                    get_float(&args[5]),
+                                    get_float(&args[6]),
+                                    get_float(&args[7]),
+                                ) {
+                                    crate::natives::registry::registry_draw_sphere(
+                                        *win, *tex, r, rings, sectors, x, y, z,
+                                    );
+                                    return Some(ExecResult::Value(RelType::Void));
+                                }
+                            }
+                        }
+                    }
+                    Some(ExecResult::Fault {
+                        msg: "[FFI] registry_draw_sphere expects (Handle win, Handle tex, Float r, Int rings, Int sectors, Float x, Float y, Float z)"
+                            .to_string(),
+                        node: "Native::Bridge::registry_draw_sphere".into()
+                    })
+                }
                 "registry_set_camera" => {
                     if args.len() == 4 {
                         let get_float = |arg: &RelType| -> Option<f32> {

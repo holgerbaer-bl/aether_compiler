@@ -384,6 +384,28 @@ Some(ExecResult::Fault {
 - **Parse the Node**: When you receive an error, look at the `node` field first. It tells you exactly which part of your generated DSL failed, bypassing the need to "guess" based on the error message alone.
 - **Immediate Self-Healing**: Use the `node` context to identify the specific code block in your memory that needs regeneration or adjustment.
 
+### Native Sphere Primitive (Sprint 79)
+To render a high-quality sphere without calculating individual vertices and indices, use the `registry_draw_sphere` call.
+
+**Syntax**:
+```json
+{
+  "Node": "ExternCall",
+  "module": "registry",
+  "function": "registry_draw_sphere",
+  "args": [
+    { "Node": "Load", "key": "window_handle" },
+    { "Node": "Load", "key": "texture_handle" },
+    1.0,  // Radius
+    32,   // Rings (Latitude segments)
+    32,   // Sectors (Longitude segments)
+    0.0,  // X
+    1.0,  // Y
+    0.0   // Z
+  ]
+}
+```
+
 ### 3. Verification
 To verify your error tracing implementation, use the intentional crash test provided in the repository:
 
@@ -393,3 +415,4 @@ cargo run --bin run_knc -- tests/intentional_crash.knoten
 
 **Required Output Format:**
 `Result: Fault: <message> (at <node_identifier>)`
+or by creating a sphere test script and observing the output.

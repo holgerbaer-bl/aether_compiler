@@ -1279,6 +1279,125 @@ pub fn registry_draw_quad_3d(
     });
 }
 
+pub fn registry_draw_sphere(
+    window_handle: i64,
+    texture_handle: i64,
+    radius: f32,
+    rings: i64,
+    sectors: i64,
+    x: f32,
+    y: f32,
+    z: f32,
+) {
+    if window_handle < 0 || texture_handle < 0 {
+        return;
+    }
+    let win_id = window_handle as usize;
+    let tex_id = texture_handle as usize;
+
+    let tex_data: Option<(u32, u32, Arc<wgpu::BindGroup>)> = with_registry(|registry| {
+        if let Some(entry) = registry.get(&tex_id) {
+            if let NativeHandle::Texture(tex) = &entry.handle {
+                return Some((tex.width, tex.height, tex.bind_group.clone()));
+            }
+        }
+        None
+    });
+
+    let (_tw, _th, bind_group) = match tex_data {
+        Some(d) => d,
+        None => return,
+    };
+
+    with_registry(|registry| {
+        if let Some(win_entry) = registry.get_mut(&win_id) {
+            if let NativeHandle::Window(SendWindow(state)) = &mut win_entry.handle {
+                let model_matrix = Mat4::from_translation(Vec3::new(x, y, z));
+
+                let mut vertices = Vec::new();
+                let mut indices = Vec::new();
+
+                let r = rings as u32;
+                let s = sectors as u32;
+
+                let r_inv = 1.0f32 / (r as f32 - 1.0);
+                let s_inv = 1.0f32 / (s as f32 - 1.0);
+
+                for i in 0..r {
+                    for j in 0..s {
+                        let y_sin = (std::f32::consts::PI * i as f32 * r_inv).sin();
+                        let x_cos = (2.0 * std::f32::consts::PI * j as f32 * s_inv).cos();
+                        let z_sin = (2.0 * std::f32::consts::PI * j as f32 * s_inv).sin();
+
+                        let px = x_cos * y_sin * radius;
+                        let py = (std::f32::consts::PI * i as f32 * r_inv - std::f32::consts::PI / 2.0).sin() * radius;
+                        let pz = z_sin * y_sin * radius;
+
+                        vertices.push(RegistryVertex {
+                            position: [px, py, pz],
+                            tex_coords: [j as f32 * s_inv, i as f32 * r_inv],
+                        });
+                    }
+                }
+
+                for i in 0..(r - 1) {
+                    for j in 0..(s - 1) {
+                        indices.push(i * s + j);
+                        indices.push(i * s + (j + 1));
+                        indices.push((i + 1) * s + (j + 1));
+                        indices.push(i * s + j);
+                        indices.push((i + 1) * s + (j + 1));
+                        indices.push((i + 1) * s + j);
+                    }
+                }
+
+                let vertex_buffer = state.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Sphere VB"),
+                    contents: bytemuck::cast_slice(&vertices),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
+                let index_buffer = state.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Sphere IB"),
+                    contents: bytemuck::cast_slice(&indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                });
+
+                if state.encoder.is_none() {
+                    state.current_texture = Some(state.surface.get_current_texture().unwrap());
+                    state.current_view = Some(
+                        state.current_texture.as_ref().unwrap().texture.create_view(&wgpu::TextureViewDescriptor::default()),
+                    );
+                    state.encoder = Some(state.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("Sphere Encoder") }));
+                }
+
+                let mut render_pass = state.encoder.as_mut().unwrap().begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Sphere Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: state.current_view.as_ref().unwrap(),
+                        resolve_target: None,
+                        ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                    })],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &state.depth_texture_view,
+                        depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store }),
+                        stencil_ops: None,
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+
+                render_pass.set_pipeline(&state.pipeline);
+                render_pass.set_bind_group(0, &*bind_group, &[]);
+                render_pass.set_bind_group(1, &state.camera_bind_group, &[]);
+                render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, bytemuck::cast_slice(&[model_matrix.to_cols_array_2d()]));
+                render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                render_pass.draw_indexed(0..(indices.len() as u32), 0, 0..1);
+            }
+        }
+    });
+}
+
 pub fn registry_set_camera(fov_degrees: f32, cam_x: f32, cam_y: f32, cam_z: f32) {
     with_registry(|registry| {
         for entry in registry.values() {
