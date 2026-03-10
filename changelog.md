@@ -109,7 +109,22 @@ Resolved critical UI type inconsistencies and introduced native horizontal layou
 
 ---
 
-## [0.79.1] - 2026-03-10
+## [v0.81.0] - Sprint 81: Primitive Resurrection & Mat4Mul
+Restored 3D primitive geometry generation and implemented the essential matrix multiplication logic for advanced 3D scenes.
+
+### Added
+- **Restored Primitives**: Re-implemented vertex/index generation for `Sphere` (UV-mapped) and `Cylinder` in `registry.rs`.
+- **`Node::Mat4Mul`**: Fully implemented 4x4 matrix multiplication in `evaluator.rs` for `RelType::Array` containing 16 elements.
+- **Background Mesh Transfer**: Introduced `RenderCommand::AddMesh` to asynchronously send generated geometry from the executor thread to the main renderer thread.
+- **Renderer Cache Integration**: `window.rs` now correctly handles `AddMesh` and draws primitives using the shared `geometry_cache`.
+
+### Fixed
+- **Placeholder Primitives**: Replaced no-op drawings with real geometric rendering.
+- **Matrix Logic**: Restored the missing `Mat4Mul` implementation in the JIT evaluator.
+
+---
+
+## [0.80.0] - Sprint 80: The Thread-Safety Revolution
 ### Added
 - **Native 3D Primitives (Cube, Cylinder)**: Expanded the registry with `registry_draw_cube` and `registry_draw_cylinder` for efficient geometry generation.
 - **Native 3D Primitives (Sphere)**: Implemented `registry_draw_sphere` in the core registry.

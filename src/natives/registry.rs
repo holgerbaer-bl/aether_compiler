@@ -55,9 +55,15 @@ pub enum RenderCommand {
     },
     UpdateWindow(usize),
     CloseWindow(usize),
+    AddMesh {
+        name: String,
+        vertices: Vec<RegistryVertex>,
+        indices: Vec<u32>,
+    },
 }
 
 static RENDER_TX: Mutex<Option<std::sync::mpsc::Sender<RenderCommand>>> = Mutex::new(None);
+static SENT_MESHES: Mutex<Option<HashSet<String>>> = Mutex::new(None);
 
 pub fn set_render_channel(tx: std::sync::mpsc::Sender<RenderCommand>) {
     let mut guard = RENDER_TX.lock().unwrap();
@@ -101,7 +107,11 @@ pub struct RegistryWindowState {
     pub depth_texture_view: wgpu::TextureView,
     pub camera_buffer: wgpu::Buffer,
     pub camera_bind_group: wgpu::BindGroup,
+    pub model_buffer: wgpu::Buffer,
+    pub model_bind_group: wgpu::BindGroup,
     pub geometry_cache: HashMap<String, CachedMesh>,
+    pub texture_cache: HashMap<usize, wgpu::BindGroup>,
+    pub default_texture_bind_group: wgpu::BindGroup,
     pub commands: Vec<RenderCommand>,
 }
 
@@ -806,14 +816,65 @@ pub fn registry_draw_sphere(
     if window_handle < 0 || texture_handle < 0 {
         return;
     }
+    let rings = rings.max(3) as u32;
+    let sectors = sectors.max(3) as u32;
+    let mesh_name = format!("sphere_{}_{}", rings, sectors);
+
+    let mut guard = SENT_MESHES.lock().unwrap();
+    let sent = guard.get_or_insert_with(HashSet::new);
+    if !sent.contains(&mesh_name) {
+        let (vertices, indices) = generate_uv_sphere(rings, sectors);
+        send_render_command(RenderCommand::AddMesh {
+            name: mesh_name.clone(),
+            vertices,
+            indices,
+        });
+        sent.insert(mesh_name.clone());
+    }
+
     send_render_command(RenderCommand::DrawSphere {
         window_id: window_handle as usize,
         texture_id: texture_handle as usize,
         x, y, z,
         radius,
-        rings: rings.max(3) as u32,
-        sectors: sectors.max(3) as u32,
+        rings,
+        sectors,
     });
+}
+
+fn generate_uv_sphere(rings: u32, sectors: u32) -> (Vec<RegistryVertex>, Vec<u32>) {
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+
+    for r in 0..=rings {
+        let phi = std::f32::consts::PI * (r as f32 / rings as f32);
+        for s in 0..=sectors {
+            let theta = 2.0 * std::f32::consts::PI * (s as f32 / sectors as f32);
+            let x = phi.sin() * theta.cos();
+            let y = phi.cos();
+            let z = phi.sin() * theta.sin();
+            let u = s as f32 / sectors as f32;
+            let v = r as f32 / rings as f32;
+            vertices.push(RegistryVertex {
+                position: [x, y, z],
+                tex_coords: [u, v],
+            });
+        }
+    }
+
+    for r in 0..rings {
+        for s in 0..sectors {
+            let first = r * (sectors + 1) + s;
+            let second = first + sectors + 1;
+            indices.push(first);
+            indices.push(second);
+            indices.push(first + 1);
+            indices.push(second);
+            indices.push(second + 1);
+            indices.push(first + 1);
+        }
+    }
+    (vertices, indices)
 }
 
 pub fn registry_draw_cube(
@@ -850,13 +911,81 @@ pub fn registry_draw_cylinder(
     if window_handle < 0 || texture_handle < 0 {
         return;
     }
+    let segments = segments.max(3) as u32;
+    let mesh_name = format!("cylinder_{}", segments);
+
+    let mut guard = SENT_MESHES.lock().unwrap();
+    let sent = guard.get_or_insert_with(HashSet::new);
+    if !sent.contains(&mesh_name) {
+        let (vertices, indices) = generate_cylinder(segments);
+        send_render_command(RenderCommand::AddMesh {
+            name: mesh_name.clone(),
+            vertices,
+            indices,
+        });
+        sent.insert(mesh_name.clone());
+    }
+
     send_render_command(RenderCommand::DrawCylinder {
         window_id: window_handle as usize,
         texture_id: texture_handle as usize,
         x, y, z,
-        radius, height,
-        segments: segments.max(3) as u32,
+        radius,
+        height,
+        segments,
     });
+}
+
+fn generate_cylinder(segments: u32) -> (Vec<RegistryVertex>, Vec<u32>) {
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+
+    // Top center
+    vertices.push(RegistryVertex { position: [0.0, 0.5, 0.0], tex_coords: [0.5, 0.5] });
+    // Bottom center
+    vertices.push(RegistryVertex { position: [0.0, -0.5, 0.0], tex_coords: [0.5, 0.5] });
+
+    let base_idx_top = 0;
+    let base_idx_bottom = 1;
+
+    // Cycle through segments
+    for i in 0..=segments {
+        let theta = 2.0 * std::f32::consts::PI * (i as f32 / segments as f32);
+        let x = theta.cos();
+        let z = theta.sin();
+        let u = i as f32 / segments as f32;
+
+        // Top cap vertex
+        vertices.push(RegistryVertex { position: [x, 0.5, z], tex_coords: [u, 0.0] });
+        // Bottom cap vertex
+        vertices.push(RegistryVertex { position: [x, -0.5, z], tex_coords: [u, 1.0] });
+    }
+
+    for i in 0..segments {
+        let top0 = 2 + i * 2;
+        let bot0 = top0 + 1;
+        let top1 = top0 + 2;
+        let bot1 = top1 + 1;
+
+        // Side faces
+        indices.push(top0);
+        indices.push(bot0);
+        indices.push(top1);
+        indices.push(bot0);
+        indices.push(bot1);
+        indices.push(top1);
+
+        // Top cap
+        indices.push(base_idx_top);
+        indices.push(top1);
+        indices.push(top0);
+
+        // Bottom cap
+        indices.push(base_idx_bottom);
+        indices.push(bot0);
+        indices.push(bot1);
+    }
+    (vertices, indices)
 }
 
 pub fn registry_set_camera(fov_degrees: f32, cam_x: f32, cam_y: f32, cam_z: f32) {

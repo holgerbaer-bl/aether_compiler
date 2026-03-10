@@ -278,6 +278,7 @@ Failure to provide these flags will result in an `ExecResult::Fault` explaining 
 ### 2. Performance: Geometry Caching (Sprint 80)
 Native 3D primitives (`Sphere`, `Cube`, `Cylinder`) are high-performance. They utilize internal **Geometry Caching** to reuse WGPU buffers. 
 - **Efficiency**: Vertices and indices are calculated once per unique configuration and stored in VRAM.
+- **Matrix Multiplication (`Mat4Mul`)**: Use this node to multiply 4x4 transformation matrices (arrays of 16 floats). It is essential for hierarchical 3D transformations.
 - **Dynamic Scaling**: Transformations are applied via model matrices, ensuring that drawing 100 spheres of the same resolution only requires one set of GPU buffers.
 - **AI Recommendation**: Prefer native primitives over manual vertex arrays for standard shapes to minimize token consumption and maximize frame rate.
 

@@ -24,6 +24,7 @@ To maintain long-term stability and reduce compilation times, the core engine ha
 KnotenCore is built for AI-driven execution, which requires strict security:
 - **Sprint 80 (Phase 1): Security Lockdown (ExternCall Bypass)**. Verified sandbox enforcement for all I/O entry points. [x]
 - **Sprint 80 (Phase 2): VRAM Rescue (Geometry Caching)**. Optimized 3D primitive rendering with geometry reuse and dynamic scaling. [x]
+- **Sprint 81: Primitive Resurrection & Mat4Mul**. Restored Sphere/Cylinder geometry generation and implemented 4x4 matrix multiplication in the evaluator. [x]
 
 The runner enforces a "Deny-by-Default" policy for all I/O:
 - **`FS Read/Write`**: Disabled by default.
@@ -42,7 +43,8 @@ KnotenCore features a unified AABB (Axis-Aligned Bounding Box) physics engine th
 ## 5. Error Tracing Foundation (Sprint 78)
 KnotenCore provides deep diagnostic context for runtime failures to enable **Self-Healing AI Agents**:
 - **Structured Faults**: Errors now include node context for AI self-healing.
-- **Native 3D Primitives**: High-performance sphere, cube, and cylinder generation offloaded to the engine (Sprint 79).
+- **Native 3D Primitives**: High-performance sphere, cube, and cylinder generation offloaded to the engine (Sprint 79 & 81).
+- **Matrix Multiplication**: Restored `Mat4Mul` node for efficient 3D transformations (Sprint 81).
 - **`Diagnostic logs`**: Runtime errors include the node type, allowing agents to pinpoint the failing logic in the Neural DSL immediately.
 - **`Scalability`**: This foundation serves as the basis for future automated refactoring and error correction by LLM-based executors.
 

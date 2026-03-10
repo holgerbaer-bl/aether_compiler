@@ -65,7 +65,26 @@ impl ExecutionEngine {
             Node::Lt(l, r) => self.do_compare(l, "<", r),
             Node::Gt(l, r) => self.do_compare(l, ">", r),
             Node::Time | Node::GlobalTime => ExecResult::Value(RelType::Float(self.startup_time.elapsed().as_secs_f64())),
-            Node::Mat4Mul(_l, _r) => ExecResult::Fault { msg: "Mat4Mul logic not yet restored".into(), node: "Node::Mat4Mul".into() },
+            Node::Mat4Mul(l, r) => {
+                let lv = match self.evaluate_inner(l) { ExecResult::Value(RelType::Array(v)) => v, _ => return ExecResult::Fault { msg: "Mat4Mul expects array".into(), node: "Node::Mat4Mul".into() } };
+                let rv = match self.evaluate_inner(r) { ExecResult::Value(RelType::Array(v)) => v, _ => return ExecResult::Fault { msg: "Mat4Mul expects array".into(), node: "Node::Mat4Mul".into() } };
+                if lv.len() != 16 || rv.len() != 16 { return ExecResult::Fault { msg: "Mat4Mul expects 16-element arrays".into(), node: "Node::Mat4Mul".into() }; }
+                
+                let a: Vec<f32> = lv.iter().map(|v| match v { RelType::Float(f) => *f as f32, RelType::Int(i) => *i as f32, _ => 0.0 }).collect();
+                let b: Vec<f32> = rv.iter().map(|v| match v { RelType::Float(f) => *f as f32, RelType::Int(i) => *i as f32, _ => 0.0 }).collect();
+                let mut res = vec![0.0f32; 16];
+                
+                for i in 0..4 {
+                    for j in 0..4 {
+                        let mut sum = 0.0f32;
+                        for k in 0..4 {
+                            sum += a[i * 4 + k] * b[k * 4 + j];
+                        }
+                        res[i * 4 + j] = sum;
+                    }
+                }
+                ExecResult::Value(RelType::Array(res.into_iter().map(|f| RelType::Float(f as f64)).collect()))
+            }
 
             // Data Structures: Arrays
             Node::ArrayCreate(nodes) => {
