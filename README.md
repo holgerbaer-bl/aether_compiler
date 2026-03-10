@@ -33,7 +33,13 @@ KnotenCore features a unified AABB (Axis-Aligned Bounding Box) physics engine th
 - **`FPS Integration`**: The camera movement automatically respects these boundaries, allowing for complex level design beyond simple voxels.
 - **`Performance`**: Collision checks are optimized to handle hundreds of active world-AABBs per frame.
 
-## 5. Automatic Memory Management (ARC)
+## 5. Error Tracing Foundation (Sprint 78)
+KnotenCore provides deep diagnostic context for runtime failures to enable **Self-Healing AI Agents**:
+- **`Structured Faults`**: The `ExecResult::Fault` structure now captures both the error message and the exact **AST Node context** (e.g., `"Node::MathDiv"`, `"Node::ArraySet"`).
+- **`Diagnostic logs`**: Runtime errors include the node type, allowing agents to pinpoint the failing logic in the Neural DSL immediately.
+- **`Scalability`**: This foundation serves as the basis for future automated refactoring and error correction by LLM-based executors.
+
+## 6. Automatic Memory Management (ARC)
 Unlike raw handle systems, KnotenCore utilizes a **Managed Handle Topology**. Native resources (Windows, Textures, Counters) are wrapped in a `NativeHandle` struct that implements the `Drop` trait. When a handle variable goes out of scope in the DSL, the engine automatically decrements the reference count and cleans up the resource in the registry.
 
 ## 3. Why it exists ("Agent First")

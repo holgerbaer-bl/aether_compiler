@@ -5,9 +5,9 @@ use std::collections::HashMap;
 impl ExecutionEngine {
     pub fn evaluate(&mut self, node: &Node) -> ExecResult {
         let res = self.evaluate_inner(node);
-        if let ExecResult::Fault(ref err) = res {
-            if err.contains("Permission Denied") || err.contains("Sandbox") {
-                self.permission_fault = Some(err.clone());
+        if let ExecResult::Fault { ref msg, .. } = res {
+            if msg.contains("Permission Denied") || msg.contains("Sandbox") {
+                self.permission_fault = Some(msg.clone());
             }
         }
         res
@@ -24,7 +24,7 @@ impl ExecutionEngine {
             // Memory & Variables
             Node::Identifier(name) => {
                 if let Some(v) = self.get_var(name) { ExecResult::Value(v) }
-                else { ExecResult::Fault(format!("Variable '{}' not found", name)) }
+                else { ExecResult::Fault { msg: format!("Variable '{}' not found", name), node: "Node::Identifier".into() } }
             }
             Node::Assign(name, expr) => {
                 match self.evaluate_inner(expr) {
@@ -43,21 +43,21 @@ impl ExecutionEngine {
                 match self.evaluate_inner(expr) {
                     ExecResult::Value(RelType::Int(v)) => ExecResult::Value(RelType::Int(v.abs())),
                     ExecResult::Value(RelType::Float(v)) => ExecResult::Value(RelType::Float(v.abs())),
-                    ExecResult::Value(_) => ExecResult::Fault("Abs expects number".into()),
+                    ExecResult::Value(_) => ExecResult::Fault { msg: "Abs expects number".into(), node: "Node::Abs".into() },
                     err => err,
                 }
             }
             Node::Sin(expr) => {
                 match self.evaluate_inner(expr) {
                     ExecResult::Value(RelType::Float(v)) => ExecResult::Value(RelType::Float(v.sin())),
-                    ExecResult::Value(_) => ExecResult::Fault("Sin expects float".into()),
+                    ExecResult::Value(_) => ExecResult::Fault { msg: "Sin expects float".into(), node: "Node::Sin".into() },
                     err => err,
                 }
             }
             Node::Cos(expr) => {
                 match self.evaluate_inner(expr) {
                     ExecResult::Value(RelType::Float(v)) => ExecResult::Value(RelType::Float(v.cos())),
-                    ExecResult::Value(_) => ExecResult::Fault("Cos expects float".into()),
+                    ExecResult::Value(_) => ExecResult::Fault { msg: "Cos expects float".into(), node: "Node::Cos".into() },
                     err => err,
                 }
             }
@@ -65,7 +65,7 @@ impl ExecutionEngine {
             Node::Lt(l, r) => self.do_compare(l, "<", r),
             Node::Gt(l, r) => self.do_compare(l, ">", r),
             Node::Time | Node::GlobalTime => ExecResult::Value(RelType::Float(self.startup_time.elapsed().as_secs_f64())),
-            Node::Mat4Mul(_l, _r) => ExecResult::Fault("Mat4Mul logic not yet restored".into()),
+            Node::Mat4Mul(_l, _r) => ExecResult::Fault { msg: "Mat4Mul logic not yet restored".into(), node: "Node::Mat4Mul".into() },
 
             // Data Structures: Arrays
             Node::ArrayCreate(nodes) => {
@@ -79,59 +79,59 @@ impl ExecutionEngine {
                 ExecResult::Value(RelType::Array(vals))
             }
             Node::ArrayGet(arr, idx) => {
-                let a = match self.evaluate_inner(arr) { ExecResult::Value(RelType::Array(v)) => v, _ => return ExecResult::Fault("Target is not an array".into()) };
-                let i = match self.evaluate_inner(idx) { ExecResult::Value(RelType::Int(v)) => v as usize, _ => return ExecResult::Fault("Index is not an integer".into()) };
+                let a = match self.evaluate_inner(arr) { ExecResult::Value(RelType::Array(v)) => v, _ => return ExecResult::Fault { msg: "Target is not an array".into(), node: "Node::ArrayGet".into() } };
+                let i = match self.evaluate_inner(idx) { ExecResult::Value(RelType::Int(v)) => v as usize, _ => return ExecResult::Fault { msg: "Index is not an integer".into(), node: "Node::ArrayGet".into() } };
                 if i < a.len() { ExecResult::Value(a[i].clone()) }
-                else { ExecResult::Fault(format!("Index {} out of bounds", i)) }
+                else { ExecResult::Fault { msg: format!("Index {} out of bounds", i), node: "Node::ArrayGet".into() } }
             }
             Node::ArraySet(arr_expr, idx_expr, val_expr) => {
                 let val = match self.evaluate_inner(val_expr) { ExecResult::Value(v) => v, err => return err };
                 if let Node::Identifier(name) = &**arr_expr {
-                    let mut a = match self.get_var(name) { Some(RelType::Array(v)) => v, _ => return ExecResult::Fault("Target is not an array".into()) };
-                    let i = match self.evaluate_inner(idx_expr) { ExecResult::Value(RelType::Int(v)) => v as usize, _ => return ExecResult::Fault("Index is not an integer".into()) };
+                    let mut a = match self.get_var(name) { Some(RelType::Array(v)) => v, _ => return ExecResult::Fault { msg: "Target is not an array".into(), node: "Node::ArraySet".into() } };
+                    let i = match self.evaluate_inner(idx_expr) { ExecResult::Value(RelType::Int(v)) => v as usize, _ => return ExecResult::Fault { msg: "Index is not an integer".into(), node: "Node::ArraySet".into() } };
                     if i < a.len() { 
                         let old = std::mem::replace(&mut a[i], val.clone());
                         self.release_handles(&old);
                         self.set_var(name.clone(), RelType::Array(a));
                         ExecResult::Value(val)
-                    } else { ExecResult::Fault(format!("Index {} out of bounds", i)) }
-                } else { ExecResult::Fault("ArraySet only supported on identifiers currently".into()) }
+                    } else { ExecResult::Fault { msg: format!("Index {} out of bounds", i), node: "Node::ArraySet".into() } }
+                } else { ExecResult::Fault { msg: "ArraySet only supported on identifiers currently".into(), node: "Node::ArraySet".into() } }
             }
             Node::ArrayPush(arr_expr, val_expr) => {
                 let val = match self.evaluate_inner(val_expr) { ExecResult::Value(v) => v, err => return err };
                 if let Node::Identifier(name) = &**arr_expr {
-                    let mut a = match self.get_var(name) { Some(RelType::Array(v)) => v, _ => return ExecResult::Fault("Target is not an array".into()) };
+                    let mut a = match self.get_var(name) { Some(RelType::Array(v)) => v, _ => return ExecResult::Fault { msg: "Target is not an array".into(), node: "Node::ArrayPush".into() } };
                     a.push(val.clone());
                     self.set_var(name.clone(), RelType::Array(a));
                     ExecResult::Value(val)
-                } else { ExecResult::Fault("ArrayPush only supported on identifiers currently".into()) }
+                } else { ExecResult::Fault { msg: "ArrayPush only supported on identifiers currently".into(), node: "Node::ArrayPush".into() } }
             }
             Node::ArrayLen(arr) => {
-                let a = match self.evaluate_inner(arr) { ExecResult::Value(RelType::Array(v)) => v, _ => return ExecResult::Fault("Target is not an array".into()) };
+                let a = match self.evaluate_inner(arr) { ExecResult::Value(RelType::Array(v)) => v, _ => return ExecResult::Fault { msg: "Target is not an array".into(), node: "Node::ArrayLen".into() } };
                 ExecResult::Value(RelType::Int(a.len() as i64))
             }
 
             // Data Structures: Maps & Objects
             Node::MapCreate => ExecResult::Value(RelType::Object(HashMap::new())),
             Node::MapGet(map_expr, key_expr) => {
-                let m = match self.evaluate_inner(map_expr) { ExecResult::Value(RelType::Object(v)) => v, _ => return ExecResult::Fault("Target is not a map/object".into()) };
-                let k = match self.evaluate_inner(key_expr) { ExecResult::Value(RelType::Str(v)) => v, _ => return ExecResult::Fault("Key is not a string".into()) };
+                let m = match self.evaluate_inner(map_expr) { ExecResult::Value(RelType::Object(v)) => v, _ => return ExecResult::Fault { msg: "Target is not a map/object".into(), node: "Node::MapGet".into() } };
+                let k = match self.evaluate_inner(key_expr) { ExecResult::Value(RelType::Str(v)) => v, _ => return ExecResult::Fault { msg: "Key is not a string".into(), node: "Node::MapGet".into() } };
                 if let Some(v) = m.get(&k) { ExecResult::Value(v.clone()) }
                 else { ExecResult::Value(RelType::Void) }
             }
             Node::MapSet(map_expr, key_expr, val_expr) => {
                 let val = match self.evaluate_inner(val_expr) { ExecResult::Value(v) => v, err => return err };
                 if let Node::Identifier(name) = &**map_expr {
-                    let mut m = match self.get_var(name) { Some(RelType::Object(v)) => v, _ => return ExecResult::Fault("Target is not a map/object".into()) };
-                    let k = match self.evaluate_inner(key_expr) { ExecResult::Value(RelType::Str(v)) => v, _ => return ExecResult::Fault("Key is not a string".into()) };
+                    let mut m = match self.get_var(name) { Some(RelType::Object(v)) => v, _ => return ExecResult::Fault { msg: "Target is not a map/object".into(), node: "Node::MapSet".into() } };
+                    let k = match self.evaluate_inner(key_expr) { ExecResult::Value(RelType::Str(v)) => v, _ => return ExecResult::Fault { msg: "Key is not a string".into(), node: "Node::MapSet".into() } };
                     if let Some(old) = m.insert(k, val.clone()) { self.release_handles(&old); }
                     self.set_var(name.clone(), RelType::Object(m));
                     ExecResult::Value(val)
-                } else { ExecResult::Fault("MapSet only supported on identifiers currently".into()) }
+                } else { ExecResult::Fault { msg: "MapSet only supported on identifiers currently".into(), node: "Node::MapSet".into() } }
             }
             Node::MapHasKey(map_expr, key_expr) => {
-                let m = match self.evaluate_inner(map_expr) { ExecResult::Value(RelType::Object(v)) => v, _ => return ExecResult::Fault("Target is not a map/object".into()) };
-                let k = match self.evaluate_inner(key_expr) { ExecResult::Value(RelType::Str(v)) => v, _ => return ExecResult::Fault("Key is not a string".into()) };
+                let m = match self.evaluate_inner(map_expr) { ExecResult::Value(RelType::Object(v)) => v, _ => return ExecResult::Fault { msg: "Target is not a map/object".into(), node: "Node::MapHasKey".into() } };
+                let k = match self.evaluate_inner(key_expr) { ExecResult::Value(RelType::Str(v)) => v, _ => return ExecResult::Fault { msg: "Key is not a string".into(), node: "Node::MapHasKey".into() } };
                 ExecResult::Value(RelType::Bool(m.contains_key(&k)))
             }
             Node::ObjectLiteral(map) => {
@@ -145,17 +145,17 @@ impl ExecutionEngine {
                 ExecResult::Value(RelType::Object(res))
             }
             Node::PropertyGet(obj_expr, prop) => {
-                let o = match self.evaluate_inner(obj_expr) { ExecResult::Value(RelType::Object(v)) => v, _ => return ExecResult::Fault("Target is not an object".into()) };
+                let o = match self.evaluate_inner(obj_expr) { ExecResult::Value(RelType::Object(v)) => v, _ => return ExecResult::Fault { msg: "Target is not an object".into(), node: "Node::PropertyGet".into() } };
                 ExecResult::Value(o.get(prop).cloned().unwrap_or(RelType::Void))
             }
             Node::PropertySet(obj_expr, prop, val_expr) => {
                 let val = match self.evaluate_inner(val_expr) { ExecResult::Value(v) => v, err => return err };
                 if let Node::Identifier(name) = &**obj_expr {
-                    let mut o = match self.get_var(name) { Some(RelType::Object(v)) => v, _ => return ExecResult::Fault("Target is not an object".into()) };
+                    let mut o = match self.get_var(name) { Some(RelType::Object(v)) => v, _ => return ExecResult::Fault { msg: "Target is not an object".into(), node: "Node::PropertySet".into() } };
                     if let Some(old) = o.insert(prop.clone(), val.clone()) { self.release_handles(&old); }
                     self.set_var(name.clone(), RelType::Object(o));
                     ExecResult::Value(val)
-                } else { ExecResult::Fault("PropertySet only supported on identifiers currently".into()) }
+                } else { ExecResult::Fault { msg: "PropertySet only supported on identifiers currently".into(), node: "Node::PropertySet".into() } }
             }
             Node::Index(container, idx) => {
                 let c = match self.evaluate_inner(container) { ExecResult::Value(v) => v, err => return err };
@@ -163,16 +163,16 @@ impl ExecutionEngine {
                 match (c, i) {
                     (RelType::Array(a), RelType::Int(idx)) => {
                         if (idx as usize) < a.len() { ExecResult::Value(a[idx as usize].clone()) }
-                        else { ExecResult::Fault("Index out of bounds".into()) }
+                        else { ExecResult::Fault { msg: "Index out of bounds".into(), node: "Node::Index".into() } }
                     }
                     (RelType::Object(m), RelType::Str(key)) => {
                         ExecResult::Value(m.get(&key).cloned().unwrap_or(RelType::Void))
                     }
                     (RelType::Str(s), RelType::Int(idx)) => {
                         if let Some(ch) = s.chars().nth(idx as usize) { ExecResult::Value(RelType::Str(ch.to_string())) }
-                        else { ExecResult::Fault("String index out of bounds".into()) }
+                        else { ExecResult::Fault { msg: "String index out of bounds".into(), node: "Node::Index".into() } }
                     }
-                    _ => ExecResult::Fault("Invalid index operation".into()),
+                    _ => ExecResult::Fault { msg: "Invalid index operation".into(), node: "Node::Index".into() },
                 }
             }
             Node::Concat(l, r) => {
@@ -181,7 +181,7 @@ impl ExecutionEngine {
                 match (lv, rv) {
                     (RelType::Str(a), RelType::Str(b)) => ExecResult::Value(RelType::Str(a + &b)),
                     (RelType::Array(mut a), RelType::Array(b)) => { a.extend(b); ExecResult::Value(RelType::Array(a)) }
-                    _ => ExecResult::Fault("Concat expects strings or arrays".into()),
+                    _ => ExecResult::Fault { msg: "Concat expects strings or arrays".into(), node: "Node::Concat".into() },
                 }
             }
 
@@ -189,19 +189,19 @@ impl ExecutionEngine {
             Node::BitAnd(l, r) => {
                 match (self.evaluate_inner(l), self.evaluate_inner(r)) {
                     (ExecResult::Value(RelType::Int(a)), ExecResult::Value(RelType::Int(b))) => ExecResult::Value(RelType::Int(a & b)),
-                    _ => ExecResult::Fault("Bitwise AND expects integers".into()),
+                    _ => ExecResult::Fault { msg: "Bitwise AND expects integers".into(), node: "Node::BitAnd".into() },
                 }
             }
             Node::BitShiftLeft(l, r) => {
                 match (self.evaluate_inner(l), self.evaluate_inner(r)) {
                     (ExecResult::Value(RelType::Int(a)), ExecResult::Value(RelType::Int(b))) => ExecResult::Value(RelType::Int(a << b)),
-                    _ => ExecResult::Fault("Bitwise SHL expects integers".into()),
+                    _ => ExecResult::Fault { msg: "Bitwise SHL expects integers".into(), node: "Node::BitShiftLeft".into() },
                 }
             }
             Node::BitShiftRight(l, r) => {
                 match (self.evaluate_inner(l), self.evaluate_inner(r)) {
                     (ExecResult::Value(RelType::Int(a)), ExecResult::Value(RelType::Int(b))) => ExecResult::Value(RelType::Int(a >> b)),
-                    _ => ExecResult::Fault("Bitwise SHR expects integers".into()),
+                    _ => ExecResult::Fault { msg: "Bitwise SHR expects integers".into(), node: "Node::BitShiftRight".into() },
                 }
             }
 
@@ -213,7 +213,7 @@ impl ExecutionEngine {
                         if let Some(eb) = else_b { self.evaluate_inner(eb) }
                         else { ExecResult::Value(RelType::Void) }
                     }
-                    _ => ExecResult::Fault("If condition must be boolean".into()),
+                    _ => ExecResult::Fault { msg: "If condition must be boolean".into(), node: "Node::If".into() },
                 }
             }
             Node::While(cond, body) => {
@@ -221,7 +221,7 @@ impl ExecutionEngine {
                     match self.evaluate_inner(body) {
                         ExecResult::Value(v) => self.release_handles(&v),
                         ExecResult::ReturnBlockInfo(v) => return ExecResult::ReturnBlockInfo(v),
-                        ExecResult::Fault(e) => return ExecResult::Fault(e),
+                        ExecResult::Fault { msg, node } => return ExecResult::Fault { msg, node },
                     }
                 }
                 ExecResult::Value(RelType::Void)
@@ -236,7 +236,7 @@ impl ExecutionEngine {
                             else { last_val = v; }
                         }
                         ExecResult::ReturnBlockInfo(v) => return ExecResult::ReturnBlockInfo(v),
-                        ExecResult::Fault(e) => return ExecResult::Fault(e),
+                        ExecResult::Fault { msg, node } => return ExecResult::Fault { msg, node },
                     }
                 }
                 ExecResult::Value(last_val)
@@ -252,10 +252,10 @@ impl ExecutionEngine {
                 ExecResult::Value(RelType::Void)
             }
             Node::Call(name, args) => {
-                let func = if let Some(f) = self.get_var(name) { f } else { return ExecResult::Fault(format!("Function '{}' not found", name)) };
+                let func = if let Some(f) = self.get_var(name) { f } else { return ExecResult::Fault { msg: format!("Function '{}' not found", name), node: "Node::Call".into() } };
                 match func {
                     RelType::FnDef(_, params, body) => {
-                        if params.len() != args.len() { return ExecResult::Fault(format!("'{}' expects {} args, got {}", name, params.len(), args.len())) }
+                        if params.len() != args.len() { return ExecResult::Fault { msg: format!("'{}' expects {} args, got {}", name, params.len(), args.len()), node: "Node::Call".into() } }
                         let mut locals = HashMap::with_capacity(params.len());
                         for (p, a) in params.iter().zip(args.iter()) {
                             match self.evaluate_inner(a) {
@@ -273,7 +273,7 @@ impl ExecutionEngine {
                             other => other,
                         }
                     }
-                    _ => ExecResult::Fault(format!("'{}' is not a function", name)),
+                    _ => ExecResult::Fault { msg: format!("'{}' is not a function", name), node: "Node::Call".into() },
                 }
             }
 
@@ -283,10 +283,10 @@ impl ExecutionEngine {
                 let ax = match self.evaluate_inner(a_max) { ExecResult::Value(v) => v, err => return err };
                 let bm = match self.evaluate_inner(b_min) { ExecResult::Value(v) => v, err => return err };
                 let bx = match self.evaluate_inner(b_max) { ExecResult::Value(v) => v, err => return err };
-                let v_am = if let Some(v) = self.to_vec3(am) { v } else { return ExecResult::Fault("a_min must be array".into()) };
-                let v_ax = if let Some(v) = self.to_vec3(ax) { v } else { return ExecResult::Fault("a_max must be array".into()) };
-                let v_bm = if let Some(v) = self.to_vec3(bm) { v } else { return ExecResult::Fault("b_min must be array".into()) };
-                let v_bx = if let Some(v) = self.to_vec3(bx) { v } else { return ExecResult::Fault("b_max must be array".into()) };
+                let v_am = if let Some(v) = self.to_vec3(am) { v } else { return ExecResult::Fault { msg: "a_min must be array".into(), node: "Node::CheckCollision".into() } };
+                let v_ax = if let Some(v) = self.to_vec3(ax) { v } else { return ExecResult::Fault { msg: "a_max must be array".into(), node: "Node::CheckCollision".into() } };
+                let v_bm = if let Some(v) = self.to_vec3(bm) { v } else { return ExecResult::Fault { msg: "b_min must be array".into(), node: "Node::CheckCollision".into() } };
+                let v_bx = if let Some(v) = self.to_vec3(bx) { v } else { return ExecResult::Fault { msg: "b_max must be array".into(), node: "Node::CheckCollision".into() } };
                 let aabb_a = crate::math::AABB::new(v_am, v_ax);
                 let aabb_b = crate::math::AABB::new(v_bm, v_bx);
                 ExecResult::Value(RelType::Int(if aabb_a.intersects(&aabb_b) { 1 } else { 0 }))
@@ -331,24 +331,24 @@ impl ExecutionEngine {
                 (RelType::Int(a), RelType::Int(b)) => RelType::Int(a + b),
                 (RelType::Float(a), RelType::Float(b)) => RelType::Float(a + b),
                 (RelType::Str(a), RelType::Str(b)) => RelType::Str(a + &b),
-                _ => return ExecResult::Fault("Invalid types for +".into()),
+                _ => return ExecResult::Fault { msg: "Invalid types for +".into(), node: "Node::Add".into() },
             },
             '-' => match (lv, rv) {
                 (RelType::Int(a), RelType::Int(b)) => RelType::Int(a - b),
                 (RelType::Float(a), RelType::Float(b)) => RelType::Float(a - b),
-                _ => return ExecResult::Fault("Invalid types for -".into()),
+                _ => return ExecResult::Fault { msg: "Invalid types for -".into(), node: "Node::Sub".into() },
             },
             '*' => match (lv, rv) {
                 (RelType::Int(a), RelType::Int(b)) => RelType::Int(a * b),
                 (RelType::Float(a), RelType::Float(b)) => RelType::Float(a * b),
-                _ => return ExecResult::Fault("Invalid types for *".into()),
+                _ => return ExecResult::Fault { msg: "Invalid types for *".into(), node: "Node::Mul".into() },
             },
             '/' => match (lv, rv) {
-                (RelType::Int(a), RelType::Int(b)) => { if b == 0 { return ExecResult::Fault("Div by zero".into()) } RelType::Int(a / b) },
+                (RelType::Int(a), RelType::Int(b)) => { if b == 0 { return ExecResult::Fault { msg: "Div by zero".into(), node: "Node::MathDiv".into() } } RelType::Int(a / b) },
                 (RelType::Float(a), RelType::Float(b)) => RelType::Float(a / b),
-                _ => return ExecResult::Fault("Invalid types for /".into()),
+                _ => return ExecResult::Fault { msg: "Invalid types for /".into(), node: "Node::Div".into() },
             },
-            _ => return ExecResult::Fault(format!("Unknown operator: {}", op)),
+            _ => return ExecResult::Fault { msg: format!("Unknown operator: {}", op), node: "Unknown".into() },
         };
         ExecResult::Value(res)
     }
@@ -361,14 +361,14 @@ impl ExecutionEngine {
             "<" => match (lv, rv) {
                 (RelType::Int(a), RelType::Int(b)) => RelType::Bool(a < b),
                 (RelType::Float(a), RelType::Float(b)) => RelType::Bool(a < b),
-                _ => return ExecResult::Fault("Invalid types for <".into()),
+                _ => return ExecResult::Fault { msg: "Invalid types for <".into(), node: "Node::Lt".into() },
             },
             ">" => match (lv, rv) {
                 (RelType::Int(a), RelType::Int(b)) => RelType::Bool(a > b),
                 (RelType::Float(a), RelType::Float(b)) => RelType::Bool(a > b),
-                _ => return ExecResult::Fault("Invalid types for >".into()),
+                _ => return ExecResult::Fault { msg: "Invalid types for >".into(), node: "Node::Gt".into() },
             },
-            _ => return ExecResult::Fault(format!("Unknown comparison: {}", op)),
+            _ => return ExecResult::Fault { msg: format!("Unknown comparison: {}", op), node: "Unknown".into() },
         };
         ExecResult::Value(res)
     }

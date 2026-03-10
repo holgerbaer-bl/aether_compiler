@@ -93,7 +93,10 @@ Node::DrawSprite(tex_node, x_node, y_node) => {
             registry::registry_draw_sprite(tex_id, x_val, y_val);
             ExecResult::Value(RelType::Void)
         }
-        _ => ExecResult::Fault("DrawSprite: invalid arguments".to_string()),
+        _ => ExecResult::Fault { 
+            msg: "DrawSprite: invalid arguments".into(), 
+            node: "Node::DrawSprite".into() 
+        },
     }
 }
 ```
@@ -201,3 +204,37 @@ KnotenCore has evolved from a pure UI execution engine into a **hybrid Game Engi
 
 ### Layout Hybridization
 Use `UIFillParent` inside a `UIFullscreen` or `UIWindow` to claim the entire rendering area before starting your `While` loops for `DrawRect`. Use `UIFixed` if you need to reserve a specific pixel-stable area within a responsive UI.
+
+---
+
+## Sprint 78: Error Tracing Foundation (Diagnostic Context)
+
+To enable robust **Self-Healing**, the engine now provides structured error reports.
+
+### 1. The Structured `Fault`
+When an operation fails (e.g., division by zero, invalid handle, permission denied), the engine returns an `ExecResult::Fault` with two fields:
+- **`msg`**: A human-readable description of what went wrong.
+- **`node`**: The exact AST node or native function where the error originated (e.g., `"Node::MathDiv"`, `"Native::IO::ReadFile"`).
+
+### 2. Implementation for AI Agents
+When extending the engine, you **must** provide this context. Avoid generic error strings.
+
+**JIT Implementation (`executor.rs` or `evaluator.rs`):**
+```rust
+return ExecResult::Fault { 
+    msg: "MyNode expects 1 argument".into(), 
+    node: "Node::MyNode".into() 
+};
+```
+
+**Native Bridge Implementation (`bridge.rs`):**
+```rust
+Some(ExecResult::Fault { 
+    msg: "Invalid handle in my_ffi_call".into(), 
+    node: "Native::Bridge::my_ffi_call".into() 
+})
+```
+
+### AI Best Practice:
+- **Parse the Node**: When you receive an error, look at the `node` field first. It tells you exactly which part of your generated DSL failed, bypassing the need to "guess" based on the error message alone.
+- **Immediate Self-Healing**: Use the `node` context to identify the specific code block in your memory that needs regeneration or adjustment.

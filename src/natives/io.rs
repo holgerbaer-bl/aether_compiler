@@ -8,9 +8,10 @@ impl NativeModule for IoModule {
         match func_name {
             "IO.WriteFile" => {
                 if args.len() != 2 {
-                    return Some(ExecResult::Fault(
-                        "IO.WriteFile expects 2 arguments (path, content)".to_string(),
-                    ));
+                    return Some(ExecResult::Fault {
+                        msg: "IO.WriteFile expects 2 arguments (path, content)".to_string(),
+                        node: "Native::IO.WriteFile".into()
+                    });
                 }
                 if let (RelType::Str(path), RelType::Str(content)) = (&args[0], &args[1]) {
                     match std::fs::write(path, content) {
@@ -18,16 +19,18 @@ impl NativeModule for IoModule {
                         Err(_) => Some(ExecResult::Value(RelType::Bool(false))),
                     }
                 } else {
-                    Some(ExecResult::Fault(
-                        "IO.WriteFile expects (String, String)".to_string(),
-                    ))
+                    Some(ExecResult::Fault {
+                        msg: "IO.WriteFile expects (String, String)".to_string(),
+                        node: "Native::IO.WriteFile".into()
+                    })
                 }
             }
             "IO.ReadFile" => {
                 if args.len() != 1 {
-                    return Some(ExecResult::Fault(
-                        "IO.ReadFile expects 1 argument (path)".to_string(),
-                    ));
+                    return Some(ExecResult::Fault {
+                        msg: "IO.ReadFile expects 1 argument (path)".to_string(),
+                        node: "Native::IO.ReadFile".into()
+                    });
                 }
                 if let RelType::Str(path) = &args[0] {
                     match std::fs::read_to_string(path) {
@@ -35,16 +38,18 @@ impl NativeModule for IoModule {
                         Err(_) => Some(ExecResult::Value(RelType::Str("".to_string()))),
                     }
                 } else {
-                    Some(ExecResult::Fault(
-                        "IO.ReadFile expects a String".to_string(),
-                    ))
+                    Some(ExecResult::Fault {
+                        msg: "IO.ReadFile expects a String".to_string(),
+                        node: "Native::IO.ReadFile".into()
+                    })
                 }
             }
             "IO.AppendFile" => {
                 if args.len() != 2 {
-                    return Some(ExecResult::Fault(
-                        "IO.AppendFile expects 2 arguments (path, content)".to_string(),
-                    ));
+                    return Some(ExecResult::Fault {
+                        msg: "IO.AppendFile expects 2 arguments (path, content)".to_string(),
+                        node: "Native::IO.AppendFile".into()
+                    });
                 }
                 if let (RelType::Str(path), RelType::Str(content)) = (&args[0], &args[1]) {
                     use std::io::Write;
@@ -61,25 +66,28 @@ impl NativeModule for IoModule {
                         Err(_) => Some(ExecResult::Value(RelType::Bool(false))),
                     }
                 } else {
-                    Some(ExecResult::Fault(
-                        "IO.AppendFile expects (String, String)".to_string(),
-                    ))
+                    Some(ExecResult::Fault {
+                        msg: "IO.AppendFile expects (String, String)".to_string(),
+                        node: "Native::IO.AppendFile".into()
+                    })
                 }
             }
             "IO.FileExists" => {
                 if args.len() != 1 {
-                    return Some(ExecResult::Fault(
-                        "IO.FileExists expects 1 argument (path)".to_string(),
-                    ));
+                    return Some(ExecResult::Fault {
+                        msg: "IO.FileExists expects 1 argument (path)".to_string(),
+                        node: "Native::IO.FileExists".into()
+                    });
                 }
                 if let RelType::Str(path) = &args[0] {
                     Some(ExecResult::Value(RelType::Bool(
                         std::path::Path::new(path).exists(),
                     )))
                 } else {
-                    Some(ExecResult::Fault(
-                        "IO.FileExists expects a String".to_string(),
-                    ))
+                    Some(ExecResult::Fault {
+                        msg: "IO.FileExists expects a String".to_string(),
+                        node: "Native::IO.FileExists".into()
+                    })
                 }
             }
             _ => None,

@@ -164,7 +164,7 @@ impl ExecutionEngine {
         use crate::executor::ExecResult;
         self.ensure_canvas_mesh_pipeline();
         if self.canvas_mesh_pipeline.is_none() || self.device.is_none() || self.camera3d_view_proj.is_none() {
-            return ExecResult::Fault("Mesh3D requires active RenderCanvas + Camera3D + WGPU device".into());
+            return ExecResult::Fault { msg: "Mesh3D requires active RenderCanvas + Camera3D + WGPU device".into(), node: "Renderer".into() };
         }
         let (vbo, ibo, index_count) = self.get_or_create_mesh(prim_name);
 
@@ -214,7 +214,7 @@ impl ExecutionEngine {
         }
         let enc = self.frame_encoder.as_mut().unwrap();
 
-        let fb_view = match self.current_canvas_view.as_ref() { Some(v) => v, None => return ExecResult::Fault("No active canvas view".into()) };
+        let fb_view = match self.current_canvas_view.as_ref() { Some(v) => v, None => return ExecResult::Fault { msg: "No active canvas view".into(), node: "Renderer".into() } };
         {
             let mut rpass = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,

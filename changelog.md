@@ -5,6 +5,16 @@
 
 ---
 
+## [v0.78.0] - Sprint 78: Error Tracing Foundation (Phase 1)
+Introduced a structured error reporting mechanism to provide deep diagnostic context for runtime failures, enabling future self-healing capabilities for AI agents.
+
+### Changed
+- **`ExecResult::Fault` Structure**: Expanded from a simple string to a struct containing both an error message (`msg`) and an AST node context (`node`).
+- **Enhanced Diagnostics**: Systematically updated the evaluator, executor, renderer, and all native modules (Math, IO, Bridge) to report the specific node or function where an error occurred (e.g., `Node::MathDiv`, `Native::IO::ReadFile`).
+- **Improved Pattern Matching**: Re-engineered the internal error handling and delegation logic in `evaluator.rs` to support the new structured fault data.
+
+---
+
 ## [v0.77.0] - Sprint 77: Unified Physics (The Collision Sprint)
 Unified the physics engine by integrating generic AABB (Axis-Aligned Bounding Box) collision logic directly into the FPS camera movement, replacing the previous hardcoded voxel-only restriction.
 

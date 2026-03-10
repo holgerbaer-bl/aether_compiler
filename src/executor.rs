@@ -226,14 +226,14 @@ pub struct ExecutionEngine {
 
 pub enum Action { UpdateData(String, RelType) }
 
-pub enum ExecResult { Value(RelType), ReturnBlockInfo(RelType), Fault(String) }
+pub enum ExecResult { Value(RelType), ReturnBlockInfo(RelType), Fault { msg: String, node: String } }
 
 impl std::fmt::Display for ExecResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExecResult::Value(v) => write!(f, "{}", v),
             ExecResult::ReturnBlockInfo(v) => write!(f, "{}", v),
-            ExecResult::Fault(e) => write!(f, "Fault: {}", e),
+            ExecResult::Fault { msg, node } => write!(f, "Fault: {} (at {})", msg, node),
         }
     }
 }
@@ -339,7 +339,7 @@ impl ExecutionEngine {
                 }
             }
             Node::Mesh3D { primitive, material: _m } => {
-                let p = match self.evaluate(primitive) { ExecResult::Value(RelType::Str(s)) => s, _ => return ExecResult::Fault("Invalid primitive".into()) };
+                let p = match self.evaluate(primitive) { ExecResult::Value(RelType::Str(s)) => s, _ => return ExecResult::Fault { msg: "Invalid primitive".into(), node: "Node::Mesh3D".into() } };
                 self.draw_mesh_immediate(&p) 
             }
             Node::PointLight3D { x, y, z, r, g, b, intensity } => {
@@ -377,7 +377,7 @@ impl ExecutionEngine {
                     self.world_aabbs.push(crate::math::AABB::new(mi, ma));
                     ExecResult::Value(RelType::Void)
                 } else {
-                    ExecResult::Fault("AddWorldAABB expects two arrays of 3 floats".into())
+                    ExecResult::Fault { msg: "AddWorldAABB expects two arrays of 3 floats".into(), node: "Node::AddWorldAABB".into() }
                 }
             }
             Node::EnableInteraction(b) => {
@@ -406,36 +406,36 @@ impl ExecutionEngine {
                 else { ExecResult::Value(RelType::Void) }
             }
             Node::FileRead(path) => {
-                if !self.permissions.allow_fs_read { return ExecResult::Fault("Permission Denied: allow_fs_read is false".into()); }
+                if !self.permissions.allow_fs_read { return ExecResult::Fault { msg: "Permission Denied: allow_fs_read is false".into(), node: "Node::FileRead".into() }; }
                 if let ExecResult::Value(RelType::Str(p)) = self.evaluate(path) {
                     match std::fs::read_to_string(&p) {
                         Ok(s) => ExecResult::Value(RelType::Str(s)),
-                        Err(e) => ExecResult::Fault(format!("File read error: {}", e)),
+                        Err(e) => ExecResult::Fault { msg: format!("File read error: {}", e), node: "Node::FileRead".into() },
                     }
-                } else { ExecResult::Fault("FileRead expects string path".into()) }
+                } else { ExecResult::Fault { msg: "FileRead expects string path".into(), node: "Node::FileRead".into() } }
             }
             Node::FileWrite(path, data) => {
-                if !self.permissions.allow_fs_write { return ExecResult::Fault("Permission Denied: allow_fs_write is false".into()); }
+                if !self.permissions.allow_fs_write { return ExecResult::Fault { msg: "Permission Denied: allow_fs_write is false".into(), node: "Node::FileWrite".into() }; }
                 if let (ExecResult::Value(RelType::Str(p)), ExecResult::Value(RelType::Str(d))) = (self.evaluate(path), self.evaluate(data)) {
-                    if let Err(e) = std::fs::write(&p, &d) { return ExecResult::Fault(format!("File write error: {}", e)); }
+                    if let Err(e) = std::fs::write(&p, &d) { return ExecResult::Fault { msg: format!("File write error: {}", e), node: "Node::FileWrite".into() }; }
                     ExecResult::Value(RelType::Void)
-                } else { ExecResult::Fault("FileWrite expects string path and data".into()) }
+                } else { ExecResult::Fault { msg: "FileWrite expects string path and data".into(), node: "Node::FileWrite".into() } }
             }
             Node::FSRead(path) => {
-                if !self.permissions.allow_fs_read { return ExecResult::Fault("Permission Denied: allow_fs_read is false".into()); }
+                if !self.permissions.allow_fs_read { return ExecResult::Fault { msg: "Permission Denied: allow_fs_read is false".into(), node: "Node::FSRead".into() }; }
                 if let ExecResult::Value(RelType::Str(p)) = self.evaluate(path) {
                     match std::fs::read_to_string(&p) {
                         Ok(s) => ExecResult::Value(RelType::Str(s)),
-                        Err(e) => ExecResult::Fault(format!("FSRead error: {}", e)),
+                        Err(e) => ExecResult::Fault { msg: format!("FSRead error: {}", e), node: "Node::FSRead".into() },
                     }
-                } else { ExecResult::Fault("FSRead expects string path".into()) }
+                } else { ExecResult::Fault { msg: "FSRead expects string path".into(), node: "Node::FSRead".into() } }
             }
             Node::FSWrite(path, data) => {
-                if !self.permissions.allow_fs_write { return ExecResult::Fault("Permission Denied: allow_fs_write is false".into()); }
+                if !self.permissions.allow_fs_write { return ExecResult::Fault { msg: "Permission Denied: allow_fs_write is false".into(), node: "Node::FSWrite".into() }; }
                 if let (ExecResult::Value(RelType::Str(p)), ExecResult::Value(RelType::Str(d))) = (self.evaluate(path), self.evaluate(data)) {
-                    if let Err(e) = std::fs::write(&p, &d) { return ExecResult::Fault(format!("FSWrite error: {}", e)); }
+                    if let Err(e) = std::fs::write(&p, &d) { return ExecResult::Fault { msg: format!("FSWrite error: {}", e), node: "Node::FSWrite".into() }; }
                     ExecResult::Value(RelType::Void)
-                } else { ExecResult::Fault("FSWrite expects string path and data".into()) }
+                } else { ExecResult::Fault { msg: "FSWrite expects string path and data".into(), node: "Node::FSWrite".into() } }
             }
             Node::NativeCall(name, args) => {
                 let mut v_args = Vec::with_capacity(args.len());
@@ -443,13 +443,13 @@ impl ExecutionEngine {
                 for mod_ in &self.native_modules {
                     if let Some(res) = mod_.handle(name, &v_args) { return res; }
                 }
-                ExecResult::Fault(format!("Native function '{}' not found", name))
+                ExecResult::Fault { msg: format!("Native function '{}' not found", name), node: "Node::NativeCall".into() }
             }
             Node::ExternCall { module, function, args } => {
                 let mut v_args = Vec::with_capacity(args.len());
                 for a in args { match self.evaluate(a) { ExecResult::Value(v) => v_args.push(v), err => return err } }
                 if let Some(res) = self.bridge.handle(module, function, &v_args) { return res; }
-                ExecResult::Fault(format!("Extern function '{}.{}' not found", module, function))
+                ExecResult::Fault { msg: format!("Extern function '{}.{}' not found", module, function), node: "Node::ExternCall".into() }
             }
             Node::UIWindow(_id, _title, body) => {
                 self.evaluate(body)
@@ -467,13 +467,13 @@ impl ExecutionEngine {
                 if let Some(bridge) = &self.async_bridge {
                     bridge.dispatch_fetch(method.clone(), url.clone(), callback.clone());
                     ExecResult::Value(RelType::Void)
-                } else { ExecResult::Fault("AsyncBridge not initialized".into()) }
+                } else { ExecResult::Fault { msg: "AsyncBridge not initialized".into(), node: "Node::Fetch".into() } }
             }
-            Node::Extract { .. } => ExecResult::Fault("Extract not implemented".into()),
+            Node::Extract { .. } => ExecResult::Fault { msg: "Extract not implemented".into(), node: "Node::Extract".into() },
             Node::EvalJSONNative(json_expr) => {
                 if let ExecResult::Value(RelType::Str(json)) = self.evaluate(json_expr) {
                     ExecResult::Value(crate::natives::fs::fs_parse_json(&json))
-                } else { ExecResult::Fault("EvalJSONNative expects string".into()) }
+                } else { ExecResult::Fault { msg: "EvalJSONNative expects string".into(), node: "Node::EvalJSONNative".into() } }
             }
             Node::ToString(expr) => {
                 ExecResult::Value(RelType::Str(self.evaluate(expr).to_string()))
@@ -493,7 +493,7 @@ impl ExecutionEngine {
             Node::LoadFont(_) | Node::DrawText(_,_,_,_,_) => ExecResult::Value(RelType::Void),
             Node::PlayNote(_,_,_) | Node::StopNote(_) | Node::PlayAudioFile(_) => ExecResult::Value(RelType::Void),
             Node::InitCamera(_) | Node::LoadTextureAtlas(_,_) | Node::LoadSample(_,_) | Node::PlaySample(_,_,_) => ExecResult::Value(RelType::Void),
-            _ => ExecResult::Fault(format!("Unsupported node in executor: {:?}", node)),
+            _ => ExecResult::Fault { msg: format!("Unsupported node in executor: {:?}", node), node: "Executor".into() },
         }
     }
 }
