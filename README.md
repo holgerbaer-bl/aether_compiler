@@ -105,3 +105,16 @@ graph TD
 ```bash
 cargo build --release
 ```
+
+## 7. Testing & Validation
+To verify the integrity of the engine's **Error Tracing** and **Security Sandbox**, you can run the intentional crash test:
+
+```bash
+cargo run --bin run_knc -- tests/intentional_crash.knoten
+```
+
+**Expected Output:**
+```text
+Result: Fault: Div by zero (at Node::MathDiv)
+```
+This confirms that the engine correctly identifies the failing AST node and reports it without a system-level panic.

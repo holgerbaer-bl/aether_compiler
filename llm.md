@@ -383,3 +383,13 @@ Some(ExecResult::Fault {
 ### AI Best Practice:
 - **Parse the Node**: When you receive an error, look at the `node` field first. It tells you exactly which part of your generated DSL failed, bypassing the need to "guess" based on the error message alone.
 - **Immediate Self-Healing**: Use the `node` context to identify the specific code block in your memory that needs regeneration or adjustment.
+
+### 3. Verification
+To verify your error tracing implementation, use the intentional crash test provided in the repository:
+
+```bash
+cargo run --bin run_knc -- tests/intentional_crash.knoten
+```
+
+**Required Output Format:**
+`Result: Fault: <message> (at <node_identifier>)`

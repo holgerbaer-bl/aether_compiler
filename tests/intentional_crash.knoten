@@ -1,0 +1,13 @@
+// tests/intentional_crash.knoten
+// This script is designed to trigger a controlled "Division by Zero" error
+// to validate the new structured Error Tracing (Sprint 78).
+
+print("Starting Error Tracing Validation...");
+
+x = 10;
+y = 0;
+
+// This operation will trigger ExecResult::Fault { msg: "Division by zero", node: "Node::MathDiv" }
+result = x / y;
+
+print("If you see this message, the validation failed (no crash caught).");
