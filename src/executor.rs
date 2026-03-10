@@ -441,14 +441,34 @@ impl ExecutionEngine {
                 let mut v_args = Vec::with_capacity(args.len());
                 for a in args { match self.evaluate(a) { ExecResult::Value(v) => v_args.push(v), err => return err } }
                 for mod_ in &self.native_modules {
-                    if let Some(res) = mod_.handle(name, &v_args) { return res; }
+                    if let Some(res) = mod_.handle(name, &v_args, &self.permissions) { return res; }
                 }
                 ExecResult::Fault { msg: format!("Native function '{}' not found", name), node: "Node::NativeCall".into() }
             }
             Node::ExternCall { module, function, args } => {
                 let mut v_args = Vec::with_capacity(args.len());
                 for a in args { match self.evaluate(a) { ExecResult::Value(v) => v_args.push(v), err => return err } }
-                if let Some(res) = self.bridge.handle(module, function, &v_args) { return res; }
+                
+                // Security Lockdown: Intercept sensitive ExternCalls before they hit the bridge
+                if module == "fs" || module == "registry" {
+                    let is_read = function.contains("read") || function.contains("load") || function.contains("exists");
+                    let is_write = function.contains("write") || function.contains("create") || function.contains("append");
+                    
+                    if is_read && !self.permissions.allow_fs_read {
+                        return ExecResult::Fault { 
+                            msg: format!("Permission Denied: FS_READ required for {}.{}", module, function), 
+                            node: "Node::ExternCall".into() 
+                        };
+                    }
+                    if is_write && !self.permissions.allow_fs_write {
+                        return ExecResult::Fault { 
+                            msg: format!("Permission Denied: FS_WRITE required for {}.{}", module, function), 
+                            node: "Node::ExternCall".into() 
+                        };
+                    }
+                }
+
+                if let Some(res) = self.bridge.handle(module, function, &v_args, &self.permissions) { return res; }
                 ExecResult::Fault { msg: format!("Extern function '{}.{}' not found", module, function), node: "Node::ExternCall".into() }
             }
             Node::UIWindow(_id, _title, body) => {

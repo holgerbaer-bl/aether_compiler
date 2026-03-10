@@ -50,16 +50,19 @@ pub enum NativeHandle {
 Then implement the public function:
 
 ```rust
-pub fn registry_my_function(arg1: i64, arg2: String) -> i64 {
-    // 1. Create or acquire the resource
+pub fn registry_my_function(arg1: i64, arg2: String, permissions: &AgentPermissions) -> i64 {
+    // 1. Check permissions (critical for security!)
+    // if !permissions.allow_fs_read { return -1; }
+
+    // 2. Create or acquire the resource
     let resource = MyResourceStruct::new(arg1, &arg2);
 
-    // 2. Allocate a unique handle ID
+    // 3. Allocate a unique handle ID
     let mut id_guard = COUNTER_NEXT_ID.lock().unwrap();
     let id = *id_guard;
     *id_guard += 1;
 
-    // 3. Insert into the ARC registry
+    // 4. Insert into the ARC registry
     with_registry(|registry| {
         registry.insert(id, RegistryEntry {
             handle: NativeHandle::MyNewResource(resource),
@@ -262,11 +265,13 @@ KnotenCore has evolved from a pure UI execution engine into a **hybrid Game Engi
 
 Sprint 76 introduces a "Sandboxed-by-Default" runtime. This impacts how AI agents interact with the OS and manage memory.
 
-### 1. The Security Sandbox
-All I/O operations are now permission-gated. If you generate code that uses `FSRead`, `FSWrite`, or their registry equivalents, the user **must** run the engine with explicit allow flags.
+### 1. The Security Sandbox (Sprint 76 & 80)
+All I/O operations are now permission-gated. If you generate code that uses `FSRead`, `FSWrite`, or their registry/FFI equivalents via `ExternCall`, the user **must** run the engine with explicit allow flags.
 
-- **`--allow-read`**: Required for reading files.
-- **`--allow-write`**: Required for writing files.
+- **`--allow-read`**: Required for reading files, `IO.ReadFile`, and `registry_read_file`.
+- **`--allow-write`**: Required for writing files, `IO.WriteFile`, and `registry_write_file`.
+
+**Security Note (Sprint 80)**: `ExternCall` is no longer a bypass. The engine intercepts high-risk bridge calls and validates them against the current sandbox permissions before execution.
 
 Failure to provide these flags will result in an `ExecResult::Fault` explaining the missing permission.
 

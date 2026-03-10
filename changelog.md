@@ -5,6 +5,20 @@
 
 ---
 
+## [v0.80.0] - Sprint 80: Security Lockdown (ExternCall Bypass)
+Addressed a critical security vulnerability where `ExternCall` and native I/O operations could bypass the engine's permission system.
+
+### Changed
+- **`NativeModule` & `BridgeModule` Traits**: Updated handles to accept `AgentPermissions`, ensuring all native extensions are permission-aware.
+- **`CoreBridge` Validation**: Integrated strict `FS_READ` and `FS_WRITE` checks into the FFI bridge for `registry` and `fs` operations.
+- **ExternCall Interception**: Added a pro-active security layer in `executor.rs` that validates function calls before they reach the FFI bridge.
+
+### Fixed
+- **Sandbox Bypass**: Closed the vulnerability allowing unauthorized file system access via `ExternCall`.
+- **Structured Error Reporting**: Permission denials now return formal `ExecResult::Fault` messages with specific context (e.g., `"Permission Denied: FS_READ"`).
+
+---
+
 ## [v0.78.0] - Sprint 78: Error Tracing Foundation
 Introduced a structured error reporting mechanism to provide deep diagnostic context for runtime failures, enabling future self-healing capabilities for AI agents.
 

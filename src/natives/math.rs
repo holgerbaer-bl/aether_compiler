@@ -1,11 +1,11 @@
-use super::NativeModule;
-use crate::executor::{ExecResult, RelType};
+use crate::executor::{ExecResult, RelType, AgentPermissions};
+use crate::natives::NativeModule;
 use noise::{NoiseFn, Perlin};
 
 pub struct MathModule;
 
 impl NativeModule for MathModule {
-    fn handle(&self, func_name: &str, args: &[RelType]) -> Option<ExecResult> {
+    fn handle(&self, func_name: &str, args: &[RelType], _permissions: &AgentPermissions) -> Option<ExecResult> {
         match func_name {
             "Math.Random" => Some(ExecResult::Value(RelType::Float(rand::random::<f64>()))),
             "Math.Sin" => {

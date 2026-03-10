@@ -1018,9 +1018,10 @@ impl crate::natives::NativeModule for RegistryModule {
         &self,
         func_name: &str,
         args: &[crate::executor::RelType],
+        permissions: &crate::executor::AgentPermissions,
     ) -> Option<crate::executor::ExecResult> {
         use crate::natives::bridge::BridgeModule;
-        crate::natives::bridge::CoreBridge.handle("registry", func_name, args)
+        crate::natives::bridge::CoreBridge.handle("registry", func_name, args, permissions)
     }
 }
 

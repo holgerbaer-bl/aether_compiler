@@ -1,13 +1,13 @@
-use crate::executor::{ExecResult, RelType};
+use crate::executor::{ExecResult, RelType, AgentPermissions};
 
 pub trait BridgeModule {
-    fn handle(&self, module: &str, function: &str, args: &[RelType]) -> Option<ExecResult>;
+    fn handle(&self, module: &str, function: &str, args: &[RelType], permissions: &AgentPermissions) -> Option<ExecResult>;
 }
 
 pub struct CoreBridge;
 
 impl BridgeModule for CoreBridge {
-    fn handle(&self, module: &str, function: &str, args: &[RelType]) -> Option<ExecResult> {
+    fn handle(&self, module: &str, function: &str, args: &[RelType], permissions: &AgentPermissions) -> Option<ExecResult> {
         if module == "test_lib" {
             match function {
                 "calculate_hash" => {
@@ -265,6 +265,12 @@ impl BridgeModule for CoreBridge {
         } else if module == "fs" {
             match function {
                 "fs_read_file" => {
+                    if !permissions.allow_fs_read {
+                        return Some(ExecResult::Fault { 
+                            msg: "Permission Denied: fs.fs_read_file requires FS_READ".to_string(), 
+                            node: "Bridge::fs.fs_read_file".into() 
+                        });
+                    }
                     if args.len() == 1 {
                         if let RelType::Str(path) = &args[0] {
                             let content = crate::natives::fs::fs_read_file(path.clone());
@@ -466,6 +472,12 @@ impl BridgeModule for CoreBridge {
                     Some(ExecResult::Value(RelType::Int(total)))
                 }
                 "registry_file_create" => {
+                    if !permissions.allow_fs_write {
+                        return Some(ExecResult::Fault { 
+                            msg: "Permission Denied: registry.registry_file_create requires FS_WRITE".to_string(), 
+                            node: "Bridge::registry.registry_file_create".into() 
+                        });
+                    }
                     if args.len() == 1 {
                         if let RelType::Str(path) = &args[0] {
                             let id = crate::natives::registry::registry_file_create(path.clone());
@@ -478,6 +490,12 @@ impl BridgeModule for CoreBridge {
                     })
                 }
                 "registry_file_write" => {
+                    if !permissions.allow_fs_write {
+                        return Some(ExecResult::Fault { 
+                            msg: "Permission Denied: registry.registry_file_write requires FS_WRITE".to_string(), 
+                            node: "Bridge::registry.registry_file_write".into() 
+                        });
+                    }
                     if args.len() == 2 {
                         if let (RelType::Handle(crate::executor::NativeHandle(id)), RelType::Str(content)) = (&args[0], &args[1]) {
                             crate::natives::registry::registry_file_write(*id, content.clone());
@@ -578,6 +596,12 @@ impl BridgeModule for CoreBridge {
                     })
                 }
                 "registry_texture_load" => {
+                    if !permissions.allow_fs_read {
+                        return Some(ExecResult::Fault { 
+                            msg: "Permission Denied: registry.registry_texture_load requires FS_READ".to_string(), 
+                            node: "Bridge::registry.registry_texture_load".into() 
+                        });
+                    }
                     if args.len() == 1 {
                         if let RelType::Str(path) = &args[0] {
                             let id = crate::natives::registry::registry_texture_load(path.clone());
@@ -591,7 +615,6 @@ impl BridgeModule for CoreBridge {
                 }
                 "registry_draw_quad_3d" => {
                     if args.len() == 7 {
-                        // Allow Int args to be implicitly cast if they are floats conceptually (KnotenCore dynamic typings fallback)
                         let get_float = |arg: &RelType| -> Option<f32> {
                             match arg {
                                 RelType::Float(f) => Some(*f as f32),
@@ -599,24 +622,23 @@ impl BridgeModule for CoreBridge {
                                 _ => None,
                             }
                         };
-
                         if let RelType::Handle(crate::executor::NativeHandle(win)) = &args[0] {
-                        if let (Some(x), Some(y), Some(z), Some(sx), Some(sy)) = (
-                            get_float(&args[2]),
-                            get_float(&args[3]),
-                            get_float(&args[4]),
-                            get_float(&args[5]),
-                            get_float(&args[6]),
-                        ) {
-                            if let RelType::Handle(crate::executor::NativeHandle(tex)) = &args[1] {
-                                crate::natives::registry::registry_draw_quad_3d(
-                                    *win, *tex, x, y, z, sx, sy,
-                                );
-                                return Some(ExecResult::Value(RelType::Void));
+                            if let (Some(x), Some(y), Some(z), Some(sx), Some(sy)) = (
+                                get_float(&args[2]),
+                                get_float(&args[3]),
+                                get_float(&args[4]),
+                                get_float(&args[5]),
+                                get_float(&args[6]),
+                            ) {
+                                if let RelType::Handle(crate::executor::NativeHandle(tex)) = &args[1] {
+                                    crate::natives::registry::registry_draw_quad_3d(
+                                        *win, *tex, x, y, z, sx, sy,
+                                    );
+                                    return Some(ExecResult::Value(RelType::Void));
+                                }
                             }
                         }
                     }
-                }
                     Some(ExecResult::Fault {
                         msg: "[FFI] registry_draw_quad_3d expects (Handle, Handle, Float, Float, Float, Float, Float)"
                             .to_string(),
@@ -799,10 +821,15 @@ impl BridgeModule for CoreBridge {
                     })
                 }
                 "registry_read_file" => {
+                    if !permissions.allow_fs_read {
+                        return Some(ExecResult::Fault { 
+                            msg: "Permission Denied: registry.registry_read_file requires FS_READ".to_string(), 
+                            node: "Bridge::registry.registry_read_file".into() 
+                        });
+                    }
                     if args.len() == 1 {
                         if let RelType::Str(path) = &args[0] {
-                            let content =
-                                crate::natives::registry::registry_read_file(path.clone());
+                            let content = crate::natives::registry::registry_read_file(path.clone());
                             return Some(ExecResult::Value(RelType::Str(content)));
                         }
                     }
@@ -812,29 +839,25 @@ impl BridgeModule for CoreBridge {
                     })
                 }
                 "registry_write_file" => {
+                    if !permissions.allow_fs_write {
+                        return Some(ExecResult::Fault { 
+                            msg: "Permission Denied: registry.registry_write_file requires FS_WRITE".to_string(), 
+                            node: "Bridge::registry.registry_write_file".into() 
+                        });
+                    }
                     if args.len() == 2 {
                         if let (RelType::Str(path), RelType::Str(content)) = (&args[0], &args[1]) {
-                            let ok = crate::natives::registry::registry_write_file(
-                                path.clone(),
-                                content.clone(),
-                            );
+                            let ok = crate::natives::registry::registry_write_file(path.clone(), content.clone());
                             return Some(ExecResult::Value(RelType::Bool(ok)));
                         }
                     }
                     Some(ExecResult::Fault {
-                        msg: "[FFI] registry_write_file expects 2 String args".to_string(),
+                        msg: "[FFI] registry_write_file expects (String, String)".to_string(),
                         node: "Native::Bridge::registry_write_file".into()
                     })
                 }
                 "registry_get_ultimate_answer" => {
-                    if args.is_empty() {
-                        let answer = crate::natives::registry::registry_get_ultimate_answer();
-                        return Some(ExecResult::Value(RelType::Int(answer)));
-                    }
-                    Some(ExecResult::Fault {
-                        msg: "[FFI] registry_get_ultimate_answer expects 0 args".to_string(),
-                        node: "Native::Bridge::registry_get_ultimate_answer".into()
-                    })
+                    Some(ExecResult::Value(RelType::Int(crate::natives::registry::registry_get_ultimate_answer())))
                 }
                 _ => None,
             }

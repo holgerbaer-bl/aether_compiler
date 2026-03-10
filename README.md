@@ -20,12 +20,14 @@ To maintain long-term stability and reduce compilation times, the core engine ha
 - **`src/window.rs`**: The skin. Manages the **winit Event-Loop**, application lifecycle, and hardware input (MouseGrab/Keyboard).
 - **`src/async_bridge.rs`**: The nervous system. Handles non-blocking operations like `Fetch` and `Extract` via background worker threads.
 
-## 3. Security & Sandboxing (Sprint 76)
-KnotenCore is built for AI-driven execution, which requires strict security. Starting with Sprint 76, the runner enforce a "Deny-by-Default" policy for I/O:
+## 3. Security & Sandboxing (Sprint 76 & 80)
+KnotenCore is built for AI-driven execution, which requires strict security. Starting with Sprint 76 and reinforced in Sprint 80, the runner enforces a "Deny-by-Default" policy for all I/O:
 - **`FS Read/Write`**: Disabled by default.
+- **`ExternCall Protection`**: FFI bridge calls (e.g., `registry_read_file`, `registry_write_file`) are now subject to the same sandbox rules as standard nodes.
 - **`Permissions`**: Must be explicitly granted via CLI flags:
-  - `--allow-read`: Enables `FSRead` and `registry_read_file`.
-  - `--allow-write`: Enables `FSWrite` and `registry_write_file`.
+  - `--allow-read`: Enables `FSRead`, `IO.ReadFile`, and `registry_read_file`.
+  - `--allow-write`: Enables `FSWrite`, `IO.WriteFile`, and `registry_write_file`.
+- **`Structured Faults`**: Unauthorized access returns `ExecResult::Fault` with specific permission denial messages for AI self-healing.
 
 ## 4. Unified Physics System (Sprint 77)
 KnotenCore features a unified AABB (Axis-Aligned Bounding Box) physics engine that bridges the voxel world and generic 3D space:
