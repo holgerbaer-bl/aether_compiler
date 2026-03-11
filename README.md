@@ -20,19 +20,23 @@ To maintain long-term stability and reduce compilation times, the core engine ha
 - **`src/window.rs`**: The skin. Manages the **winit Event-Loop**, application lifecycle, and hardware input (MouseGrab/Keyboard).
 - **`src/async_bridge.rs`**: The nervous system. Handles non-blocking operations like `Fetch` and `Extract` via background worker threads.
 
-## 3. Security & Sandboxing (Sprint 76 & 80)
+## 3. Security & Sandboxing (Sprint 76, 80 & 83)
 KnotenCore is built for AI-driven execution, which requires strict security:
 - **Sprint 80 (Phase 1): Security Lockdown (ExternCall Bypass)**. Verified sandbox enforcement for all I/O entry points. [x]
 - **Sprint 80 (Phase 2): VRAM Rescue (Geometry Caching)**. Optimized 3D primitive rendering with geometry reuse and dynamic scaling. [x]
 - **Sprint 81: Primitive Resurrection & Mat4Mul**. Restored Sphere/Cylinder geometry generation and implemented 4x4 matrix multiplication in the evaluator. [x]
+- **Sprint 83: Emergency Security & Architecture Fix**. Closed 6 Audit Round 6 findings (network sandbox, FS path traversal, VM panics, unsound Sync, scope logic). [x]
 
-The runner enforces a "Deny-by-Default" policy for all I/O:
-- **`FS Read/Write`**: Disabled by default.
-- **`ExternCall Protection`**: FFI bridge calls (e.g., `registry_read_file`, `registry_write_file`) are now subject to the same sandbox rules as standard nodes.
+The runner enforces a **"Deny-by-Default"** policy for all I/O:
+- **`FS Read/Write`**: Disabled by default. Paths are canonicalized and verified to not escape the working directory, preventing `../../etc/passwd`-class attacks.
+- **`Network (Fetch)`**: Disabled by default.
+- **`ExternCall Protection`**: FFI bridge calls are subject to the same sandbox rules as standard nodes.
 - **`Permissions`**: Must be explicitly granted via CLI flags:
   - `--allow-read`: Enables `FSRead`, `IO.ReadFile`, and `registry_read_file`.
   - `--allow-write`: Enables `FSWrite`, `IO.WriteFile`, and `registry_write_file`.
+  - `--allow-network`: Enables `Node::Fetch` and outbound HTTP calls.
 - **`Structured Faults`**: Unauthorized access returns `ExecResult::Fault` with specific permission denial messages for AI self-healing.
+
 
 ## 4. Unified Physics System (Sprint 77)
 KnotenCore features a unified AABB (Axis-Aligned Bounding Box) physics engine that bridges the voxel world and generic 3D space:

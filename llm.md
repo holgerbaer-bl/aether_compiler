@@ -362,7 +362,34 @@ To render standard shapes without manual vertex management, use the native regis
 
 ---
 
+## Sprint 83: Emergency Security & Architecture Fix
+
+### 1. Network Sandbox (`allow_network`)
+`Node::Fetch` now requires `allow_network = true` at the engine level. AI agents must instruct users to run with `--allow-network`:
+
+```bash
+cargo run --bin run_knc -- --allow-network my_script.knoten
+```
+
+Without this flag, all `Fetch` nodes return `ExecResult::Fault { msg: "Permission Denied: allow_network is false. Use --allow-network flag.", node: "Node::Fetch" }`.
+
+**AI Best Practice**: Do not embed `Node::Fetch` in scripts intended to run in restricted sandboxes. Check the `fetch_error` memory variable in the callback to detect runtime failures.
+
+### 2. FS Path Canonicalization (Sandbox Integrity)
+All four FS operations (`FileRead`, `FileWrite`, `FSRead`, `FSWrite`) now validate paths before execution:
+- **Reads**: Path is canonicalized via `std::fs::canonicalize()`. File must exist.
+- **Writes**: Path is normalized by resolving `..` components. File need not exist.
+- **Restriction**: Resolved path must be within the current working directory.
+
+**AI Rule**: Always use relative paths from the working directory. Do NOT generate paths containing `..` components. A path like `./output/result.txt` is valid; `../../sensitive.txt` will be rejected with `Security: Path escape detected`.
+
+### 3. VM Type Safety
+The Register VM (`vm.rs`) no longer panics on type mismatches. Operations on incompatible types now push `RelType::Void` onto the stack. This means a type error in a bytecode path returns `Void` instead of crashing the process.
+
+---
+
 ## Verification & Testing
+
 
 AI agents can verify their implementation by running the intentional crash test or by creating a primitives test script:
 

@@ -217,8 +217,10 @@ pub struct ExecutionEngine {
 
 // SAFETY: ExecutionEngine is moved to a background thread and stays there.
 // The non-Send fields (audio streams) are only accessed by the engine itself.
+// unsafe impl Sync is intentionally omitted: ExecutionEngine contains cpal::Stream
+// which is !Sync. The engine is single-owner per thread and never shared across
+// threads simultaneously, so Send alone is sufficient.
 unsafe impl Send for ExecutionEngine {}
-unsafe impl Sync for ExecutionEngine {}
 
 pub enum Action { UpdateData(String, RelType) }
 
@@ -270,21 +272,29 @@ impl ExecutionEngine {
     }
 
     pub fn set_var(&mut self, name: String, val: RelType) {
+        // Walk the call stack from innermost → outermost looking for an existing binding.
+        // If found, update in place (assignment to an already-declared variable).
         for frame in self.call_stack.iter_mut().rev() {
             if frame.locals.contains_key(&name) {
                 frame.locals.insert(name, val);
                 return;
             }
         }
-        if let Some(frame) = self.call_stack.last_mut() {
-            frame.locals.insert(name, val);
-        } else {
-            self.memory.insert(name, val);
-        }
+        // FINDING-09 FIX: Variable not found in any frame → it is a new global declaration.
+        // Always create new variables in self.memory, not in the innermost call frame.
+        // This prevents silent scoping bugs where top-level variables defined inside a
+        // function call would be garbage-collected when the function's frame is popped.
+        self.memory.insert(name, val);
     }
 
     pub fn release_handles(&self, _val: &RelType) {
-        // Obsolete due to Drop impl
+        // FINDING-01 ANALYSIS: This is intentionally a no-op.
+        // NativeHandle implements Drop, which calls registry_release automatically.
+        // FnDef(_, _, Box<Node>) is freed by Rust's drop glue when the RelType value
+        // goes out of scope or is overwritten via set_var.
+        // Re-entering this function to manually recurse would double-count releases
+        // for NativeHandle variants. The call sites in evaluator.rs (Block, While,
+        // Call frame cleanup) ensure values are dropped immediately after this call.
     }
 
     fn default_new() -> Self {
@@ -407,33 +417,53 @@ impl ExecutionEngine {
             Node::FileRead(path) => {
                 if !self.permissions.allow_fs_read { return ExecResult::Fault { msg: "Permission Denied: allow_fs_read is false".into(), node: "Node::FileRead".into() }; }
                 if let ExecResult::Value(RelType::Str(p)) = self.evaluate(path) {
-                    match std::fs::read_to_string(&p) {
-                        Ok(s) => ExecResult::Value(RelType::Str(s)),
-                        Err(e) => ExecResult::Fault { msg: format!("File read error: {}", e), node: "Node::FileRead".into() },
+                    // FINDING-05: Canonicalize path to prevent directory traversal escapes
+                    match Self::validate_fs_path(&p) {
+                        Err(e) => ExecResult::Fault { msg: format!("Security: {}", e), node: "Node::FileRead".into() },
+                        Ok(safe_path) => match std::fs::read_to_string(&safe_path) {
+                            Ok(s) => ExecResult::Value(RelType::Str(s)),
+                            Err(e) => ExecResult::Fault { msg: format!("File read error: {}", e), node: "Node::FileRead".into() },
+                        }
                     }
                 } else { ExecResult::Fault { msg: "FileRead expects string path".into(), node: "Node::FileRead".into() } }
             }
             Node::FileWrite(path, data) => {
                 if !self.permissions.allow_fs_write { return ExecResult::Fault { msg: "Permission Denied: allow_fs_write is false".into(), node: "Node::FileWrite".into() }; }
                 if let (ExecResult::Value(RelType::Str(p)), ExecResult::Value(RelType::Str(d))) = (self.evaluate(path), self.evaluate(data)) {
-                    if let Err(e) = std::fs::write(&p, &d) { return ExecResult::Fault { msg: format!("File write error: {}", e), node: "Node::FileWrite".into() }; }
-                    ExecResult::Value(RelType::Void)
+                    // FINDING-05: Canonicalize path to prevent directory traversal escapes
+                    match Self::validate_fs_path_write(&p) {
+                        Err(e) => ExecResult::Fault { msg: format!("Security: {}", e), node: "Node::FileWrite".into() },
+                        Ok(safe_path) => {
+                            if let Err(e) = std::fs::write(&safe_path, &d) { return ExecResult::Fault { msg: format!("File write error: {}", e), node: "Node::FileWrite".into() }; }
+                            ExecResult::Value(RelType::Void)
+                        }
+                    }
                 } else { ExecResult::Fault { msg: "FileWrite expects string path and data".into(), node: "Node::FileWrite".into() } }
             }
             Node::FSRead(path) => {
                 if !self.permissions.allow_fs_read { return ExecResult::Fault { msg: "Permission Denied: allow_fs_read is false".into(), node: "Node::FSRead".into() }; }
                 if let ExecResult::Value(RelType::Str(p)) = self.evaluate(path) {
-                    match std::fs::read_to_string(&p) {
-                        Ok(s) => ExecResult::Value(RelType::Str(s)),
-                        Err(e) => ExecResult::Fault { msg: format!("FSRead error: {}", e), node: "Node::FSRead".into() },
+                    // FINDING-05: Canonicalize path to prevent directory traversal escapes
+                    match Self::validate_fs_path(&p) {
+                        Err(e) => ExecResult::Fault { msg: format!("Security: {}", e), node: "Node::FSRead".into() },
+                        Ok(safe_path) => match std::fs::read_to_string(&safe_path) {
+                            Ok(s) => ExecResult::Value(RelType::Str(s)),
+                            Err(e) => ExecResult::Fault { msg: format!("FSRead error: {}", e), node: "Node::FSRead".into() },
+                        }
                     }
                 } else { ExecResult::Fault { msg: "FSRead expects string path".into(), node: "Node::FSRead".into() } }
             }
             Node::FSWrite(path, data) => {
                 if !self.permissions.allow_fs_write { return ExecResult::Fault { msg: "Permission Denied: allow_fs_write is false".into(), node: "Node::FSWrite".into() }; }
                 if let (ExecResult::Value(RelType::Str(p)), ExecResult::Value(RelType::Str(d))) = (self.evaluate(path), self.evaluate(data)) {
-                    if let Err(e) = std::fs::write(&p, &d) { return ExecResult::Fault { msg: format!("FSWrite error: {}", e), node: "Node::FSWrite".into() }; }
-                    ExecResult::Value(RelType::Void)
+                    // FINDING-05: Canonicalize path to prevent directory traversal escapes
+                    match Self::validate_fs_path_write(&p) {
+                        Err(e) => ExecResult::Fault { msg: format!("Security: {}", e), node: "Node::FSWrite".into() },
+                        Ok(safe_path) => {
+                            if let Err(e) = std::fs::write(&safe_path, &d) { return ExecResult::Fault { msg: format!("FSWrite error: {}", e), node: "Node::FSWrite".into() }; }
+                            ExecResult::Value(RelType::Void)
+                        }
+                    }
                 } else { ExecResult::Fault { msg: "FSWrite expects string path and data".into(), node: "Node::FSWrite".into() } }
             }
             Node::NativeCall(name, args) => {
@@ -496,6 +526,10 @@ impl ExecutionEngine {
             Node::UIFixed { body, .. } => self.evaluate(body),
             Node::UIFillParent => ExecResult::Value(RelType::Void),
             Node::Fetch { method, url, callback } => {
+                // FINDING-03 FIX: Check network permission before dispatching fetch
+                if !self.permissions.allow_network {
+                    return ExecResult::Fault { msg: "Permission Denied: allow_network is false. Use --allow-network flag.".into(), node: "Node::Fetch".into() };
+                }
                 if let Some(bridge) = &self.async_bridge {
                     bridge.dispatch_fetch(method.clone(), url.clone(), callback.clone());
                     ExecResult::Value(RelType::Void)
@@ -527,5 +561,54 @@ impl ExecutionEngine {
             Node::InitCamera(_) | Node::LoadTextureAtlas(_,_) | Node::LoadSample(_,_) | Node::PlaySample(_,_,_) => ExecResult::Value(RelType::Void),
             _ => ExecResult::Fault { msg: format!("Unsupported node in executor: {:?}", node), node: "Executor".into() },
         }
+    }
+}
+
+impl ExecutionEngine {
+    /// FINDING-05: Validate and canonicalize a filesystem path for read operations.
+    /// The resolved path must be a descendant of the current working directory.
+    fn validate_fs_path(path: &str) -> Result<std::path::PathBuf, String> {
+        let cwd = std::env::current_dir()
+            .map_err(|e| format!("Cannot determine working directory: {}", e))?;
+        // For reads: the file must already exist, so we can canonicalize directly.
+        let canonical = std::fs::canonicalize(path)
+            .map_err(|e| format!("Path '{}' is invalid or does not exist: {}", path, e))?;
+        if !canonical.starts_with(&cwd) {
+            return Err(format!(
+                "Path escape detected: '{}' resolves outside the working directory",
+                path
+            ));
+        }
+        Ok(canonical)
+    }
+
+    /// FINDING-05: Validate a filesystem path for write operations.
+    /// For writes, the file may not yet exist — we validate the parent directory.
+    fn validate_fs_path_write(path: &str) -> Result<std::path::PathBuf, String> {
+        let cwd = std::env::current_dir()
+            .map_err(|e| format!("Cannot determine working directory: {}", e))?;
+        let target = std::path::Path::new(path);
+        // Resolve as an absolute path relative to cwd if not already absolute
+        let abs = if target.is_absolute() {
+            target.to_path_buf()
+        } else {
+            cwd.join(target)
+        };
+        // Normalize by resolving ".." components without requiring the path to exist
+        let mut normalized = std::path::PathBuf::new();
+        for component in abs.components() {
+            match component {
+                std::path::Component::ParentDir => { normalized.pop(); }
+                std::path::Component::CurDir => {}
+                c => normalized.push(c),
+            }
+        }
+        if !normalized.starts_with(&cwd) {
+            return Err(format!(
+                "Path escape detected: '{}' resolves outside the working directory",
+                path
+            ));
+        }
+        Ok(normalized)
     }
 }

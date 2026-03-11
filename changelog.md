@@ -3,13 +3,32 @@
 **Vision:** A high-performance, general-purpose hybrid language (JIT/AOT) with native WGPU rendering and deterministic ARC memory management.
 **Development Standard:** To ensure absolute version integrity, the architect must guarantee that every single sprint is cleanly pushed to the Git repository by the autonomous agent. This successful push must be explicitly documented in every sprint report.
 
----
+## [v0.83.0] - Sprint 83: Emergency Security & Architecture Fix (2026-03-11)
+Closed 6 critical findings from Audit Round 6. Full sandbox hardening pass.
+
+### Fixed — Security
+- **FINDING-03 — Network Sandbox Escape**: `Node::Fetch` now checks `allow_network` permission before dispatching to `AsyncBridge`. Without the `--allow-network` flag the engine returns `ExecResult::Fault` immediately, preventing silently unrestricted outbound HTTP calls.
+- **FINDING-05 — FS Path Traversal (Directory Escape)**: All four filesystem operations (`FileRead`, `FileWrite`, `FSRead`, `FSWrite`) now validate and canonicalize the supplied path. Paths that resolve outside the current working directory are rejected with `Security: Path escape detected`, closing the `../../etc/passwd`-class sandbox escape.
+- **FINDING-09 — `set_var` Scope Pollution**: Refactored `set_var` in `executor.rs`. When a variable is not found in any call stack frame, it is now created in the global `self.memory` instead of silently pushing into the innermost `StackFrame`. This eliminates the bug where first-time assignments inside function calls were invisibly dropped on return.
+
+### Fixed — VM Hardening
+- **FINDING-06 — VM `panic!()` Calls**: Replaced all 5 `panic!("VM TypeError: ...")` calls and all naked `.unwrap()` calls on `stack.pop()` in `VM::execute` with safe `unwrap_or(RelType::Void)` fallbacks. Type mismatches now push `RelType::Void` onto the stack and execution continues, instead of aborting the process.
+
+### Fixed — Architecture
+- **FINDING-07 — Unsound `unsafe impl Sync`**: Removed `unsafe impl Sync for ExecutionEngine`. `ExecutionEngine` contains `cpal::Stream` which is explicitly `!Sync`. Since the engine is single-owner per thread, only `Send` is required. The `unsafe impl Send` (already correct) is retained.
+- **FINDING-01 — `release_handles` FnDef Analysis**: Confirmed via code analysis that `release_handles` is correctly a no-op. Rust's drop glue on `RelType::FnDef(_, _, Box<Node>)` handles recursive deallocation automatically. Added a comprehensive documentation comment explaining why the no-op is correct and safe, preventing future well-intentioned but incorrect attempts to add manual recursion.
+
+### Added
+- **`--allow-network` CLI Flag**: Added to `run_knc` binary. Required to use `Node::Fetch`. Mirrors the existing `--allow-read` / `--allow-write` pattern.
+- **`validate_fs_path` / `validate_fs_path_write`**: Two internal static helpers on `ExecutionEngine` implementing secure path resolution. Read-paths use `std::fs::canonicalize` (requires file to exist). Write-paths normalize `..` components manually without requiring the target to exist, then verify the result is inside the working directory.
+
 
 ## [v0.80.0] - Sprint 80: Security Lockdown (ExternCall Bypass)
 Addressed a critical security vulnerability where `ExternCall` and native I/O operations could bypass the engine's permission system.
 
 ### Changed
 - **`NativeModule` & `BridgeModule` Traits**: Updated handles to accept `AgentPermissions`, ensuring all native extensions are permission-aware.
+
 - **`CoreBridge` Validation**: Integrated strict `FS_READ` and `FS_WRITE` checks into the FFI bridge for `registry` and `fs` operations.
 - **ExternCall Interception**: Added a pro-active security layer in `executor.rs` that validates function calls before they reach the FFI bridge.
 

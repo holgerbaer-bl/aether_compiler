@@ -118,8 +118,8 @@ impl VM {
                 Opcode::PushFloat(v) => self.stack.push(RelType::Float(*v)),
                 Opcode::PushBool(v) => self.stack.push(RelType::Bool(*v)),
                 Opcode::Add => {
-                    let r = self.stack.pop().unwrap();
-                    let l = self.stack.pop().unwrap();
+                    let r = self.stack.pop().unwrap_or(RelType::Void);
+                    let l = self.stack.pop().unwrap_or(RelType::Void);
                     match (l, r) {
                         (RelType::Int(a), RelType::Int(b)) => self.stack.push(RelType::Int(a + b)),
                         (RelType::Float(a), RelType::Float(b)) => {
@@ -131,12 +131,13 @@ impl VM {
                         (RelType::Float(a), RelType::Int(b)) => {
                             self.stack.push(RelType::Float(a + b as f64))
                         }
-                        _ => panic!("VM TypeError: Add requires num"),
+                        // FINDING-06 FIX: Type mismatch yields Void instead of panic
+                        _ => self.stack.push(RelType::Void),
                     }
                 }
                 Opcode::Sub => {
-                    let r = self.stack.pop().unwrap();
-                    let l = self.stack.pop().unwrap();
+                    let r = self.stack.pop().unwrap_or(RelType::Void);
+                    let l = self.stack.pop().unwrap_or(RelType::Void);
                     match (l, r) {
                         (RelType::Int(a), RelType::Int(b)) => self.stack.push(RelType::Int(a - b)),
                         (RelType::Float(a), RelType::Float(b)) => {
@@ -148,12 +149,13 @@ impl VM {
                         (RelType::Float(a), RelType::Int(b)) => {
                             self.stack.push(RelType::Float(a - b as f64))
                         }
-                        _ => panic!("VM TypeError: Sub requires num"),
+                        // FINDING-06 FIX: Type mismatch yields Void instead of panic
+                        _ => self.stack.push(RelType::Void),
                     }
                 }
                 Opcode::Mul => {
-                    let r = self.stack.pop().unwrap();
-                    let l = self.stack.pop().unwrap();
+                    let r = self.stack.pop().unwrap_or(RelType::Void);
+                    let l = self.stack.pop().unwrap_or(RelType::Void);
                     match (l, r) {
                         (RelType::Int(a), RelType::Int(b)) => self.stack.push(RelType::Int(a * b)),
                         (RelType::Float(a), RelType::Float(b)) => {
@@ -165,12 +167,13 @@ impl VM {
                         (RelType::Float(a), RelType::Int(b)) => {
                             self.stack.push(RelType::Float(a * b as f64))
                         }
-                        _ => panic!("VM TypeError: Mul requires num"),
+                        // FINDING-06 FIX: Type mismatch yields Void instead of panic
+                        _ => self.stack.push(RelType::Void),
                     }
                 }
                 Opcode::Div => {
-                    let r = self.stack.pop().unwrap();
-                    let l = self.stack.pop().unwrap();
+                    let r = self.stack.pop().unwrap_or(RelType::Void);
+                    let l = self.stack.pop().unwrap_or(RelType::Void);
                     match (l, r) {
                         (RelType::Int(a), RelType::Int(b)) => self
                             .stack
@@ -178,17 +181,18 @@ impl VM {
                         (RelType::Float(a), RelType::Float(b)) => self
                             .stack
                             .push(RelType::Float(if b != 0.0 { a / b } else { 0.0 })),
-                        _ => panic!("VM TypeError: Div requires num"),
+                        // FINDING-06 FIX: Type mismatch yields Void instead of panic
+                        _ => self.stack.push(RelType::Void),
                     }
                 }
                 Opcode::Eq => {
-                    let r = self.stack.pop().unwrap();
-                    let l = self.stack.pop().unwrap();
+                    let r = self.stack.pop().unwrap_or(RelType::Void);
+                    let l = self.stack.pop().unwrap_or(RelType::Void);
                     self.stack.push(RelType::Bool(l == r));
                 }
                 Opcode::Lt => {
-                    let r = self.stack.pop().unwrap();
-                    let l = self.stack.pop().unwrap();
+                    let r = self.stack.pop().unwrap_or(RelType::Void);
+                    let l = self.stack.pop().unwrap_or(RelType::Void);
                     match (l, r) {
                         (RelType::Int(a), RelType::Int(b)) => self.stack.push(RelType::Bool(a < b)),
                         (RelType::Float(a), RelType::Float(b)) => {
@@ -198,8 +202,8 @@ impl VM {
                     }
                 }
                 Opcode::Gt => {
-                    let r = self.stack.pop().unwrap();
-                    let l = self.stack.pop().unwrap();
+                    let r = self.stack.pop().unwrap_or(RelType::Void);
+                    let l = self.stack.pop().unwrap_or(RelType::Void);
                     match (l, r) {
                         (RelType::Int(a), RelType::Int(b)) => self.stack.push(RelType::Bool(a > b)),
                         (RelType::Float(a), RelType::Float(b)) => {

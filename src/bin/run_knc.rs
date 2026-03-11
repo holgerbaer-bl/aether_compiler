@@ -52,6 +52,8 @@ fn run() {
             engine.permissions.allow_fs_read = true;
         } else if arg == "--allow-write" {
             engine.permissions.allow_fs_write = true;
+        } else if arg == "--allow-network" {
+            engine.permissions.allow_network = true;
         } else {
             file_path = arg.clone();
         }
@@ -68,7 +70,7 @@ fn run() {
     }
 
     if file_path.is_empty() {
-        eprintln!("Usage: run_knc [--check] [--no-opt] [--transpile] [--allow-read] [--allow-write] <path_to.nod>");
+        eprintln!("Usage: run_knc [--check] [--no-opt] [--transpile] [--allow-read] [--allow-write] [--allow-network] <path_to.nod>");
         eprintln!("       run_knc build <path_to.nod>");
         std::process::exit(1);
     }
