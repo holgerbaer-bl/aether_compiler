@@ -337,9 +337,9 @@ impl ExecutionEngine {
                     err => err,
                 }
             }
-            Node::Mesh3D { primitive, material: _m } => {
-                let p = match self.evaluate(primitive) { ExecResult::Value(RelType::Str(s)) => s, _ => return ExecResult::Fault { msg: "Invalid primitive".into(), node: "Node::Mesh3D".into() } };
-                self.draw_mesh_immediate(&p) 
+            Node::Mesh3D { primitive: _, material: _ } => {
+                println!("Warning: Node::Mesh3D is deprecated in Sprint 82. Use native primitives like Cube, Sphere, etc.");
+                ExecResult::Value(RelType::Void)
             }
             Node::PointLight3D { x, y, z, r, g, b, intensity } => {
                 let px = match self.evaluate(x) { ExecResult::Value(RelType::Float(f)) => f as f32, ExecResult::Value(RelType::Int(i)) => i as f32, _ => 0.0 };
@@ -450,16 +450,29 @@ impl ExecutionEngine {
                 
                 // Security Lockdown: Intercept sensitive ExternCalls before they hit the bridge
                 if module == "fs" || module == "registry" {
-                    let is_read = function.contains("read") || function.contains("load") || function.contains("exists");
-                    let is_write = function.contains("write") || function.contains("create") || function.contains("append");
+                    // Strict whitelist of functions requiring READ permissions
+                    let read_requires = [
+                        "registry_read_file",
+                        "registry_texture_load", // Loading a texture reads a file
+                        "fs_read",
+                        "fs_exists",
+                    ];
                     
-                    if is_read && !self.permissions.allow_fs_read {
+                    // Strict whitelist of functions requiring WRITE permissions
+                    let write_requires = [
+                        "registry_write_file",
+                        "fs_write",
+                        "fs_create",
+                        "fs_append",
+                    ];
+                    
+                    if read_requires.contains(&function.as_str()) && !self.permissions.allow_fs_read {
                         return ExecResult::Fault { 
                             msg: format!("Permission Denied: FS_READ required for {}.{}", module, function), 
                             node: "Node::ExternCall".into() 
                         };
                     }
-                    if is_write && !self.permissions.allow_fs_write {
+                    if write_requires.contains(&function.as_str()) && !self.permissions.allow_fs_write {
                         return ExecResult::Fault { 
                             msg: format!("Permission Denied: FS_WRITE required for {}.{}", module, function), 
                             node: "Node::ExternCall".into() 

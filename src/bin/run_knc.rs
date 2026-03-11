@@ -139,8 +139,14 @@ fn run() {
         .expect("Failed to spawn executor thread");
 
     // ── Main Thread Loop ─────────────────────────────────────────────
-    use winit::event_loop::EventLoop;
-    let event_loop = EventLoop::new().expect("Failed to create event loop");
+    use winit::event_loop::{EventLoop, EventLoopBuilder};
+    #[cfg(target_os = "windows")]
+    use winit::platform::windows::EventLoopBuilderExtWindows;
+
+    let mut builder = EventLoopBuilder::new();
+    #[cfg(target_os = "windows")]
+    builder.with_any_thread(true);
+    let event_loop = builder.build().expect("Failed to create event loop");
     let mut app = knoten_core::window::KnotenApp::new(rx);
     let _ = event_loop.run_app(&mut app);
 }

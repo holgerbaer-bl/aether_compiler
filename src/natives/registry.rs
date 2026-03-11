@@ -90,10 +90,10 @@ pub struct RegistryWindowState {
     pub window: Arc<WinitWindow>,
     pub input: Arc<Mutex<InputState>>,
     pub surface: wgpu::Surface<'static>,
+    pub surface_format: wgpu::TextureFormat,
     pub device: Arc<wgpu::Device>,
     pub queue: Arc<wgpu::Queue>,
     pub pipeline: wgpu::RenderPipeline,
-    pub bind_group_layout: wgpu::BindGroupLayout,
     pub width: u32,
     pub height: u32,
     // Hack for synchronous winit updates without a main loop pump:

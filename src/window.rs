@@ -62,17 +62,35 @@ impl KnotenApp {
                 // In a real refactor, we'd move the pipeline setup code here.
                 // For brevity, I'm assuming we'll use a shared initialization helper.
                 
-                // Setup proper 3D pipeline
                 let camera_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("Camera BGL"),
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
-                        count: None,
-                    }],
+                    label: Some("Mesh3D Camera/Uniform BGL"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture { multisampled: false, view_dimension: wgpu::TextureViewDimension::D2, sample_type: wgpu::TextureSampleType::Float { filterable: true } },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 3,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture { multisampled: false, view_dimension: wgpu::TextureViewDimension::D2, sample_type: wgpu::TextureSampleType::Float { filterable: true } },
+                            count: None,
+                        },
+                    ],
                 });
-
                 let material_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     label: Some("Material BGL"),
                     entries: &[
@@ -108,37 +126,8 @@ impl KnotenApp {
                 });
 
                 let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: Some("3D Shader"),
-                    source: wgpu::ShaderSource::Wgsl("
-                        struct CameraUniform { view_proj: mat4x4<f32>, camera_pos: vec4<f32> };
-                        @group(0) @binding(0) var<uniform> camera: CameraUniform;
-
-                        struct ModelUniform { transform: mat4x4<f32> };
-                        @group(2) @binding(0) var<uniform> model: ModelUniform;
-
-                        struct VertexInput {
-                            @location(0) position: vec3<f32>,
-                            @location(1) tex_coords: vec2<f32>,
-                        };
-                        struct VertexOutput {
-                            @builtin(position) clip_position: vec4<f32>,
-                            @location(0) tex_coords: vec2<f32>,
-                        };
-
-                        @vertex fn vs_main(input: VertexInput) -> VertexOutput {
-                            var out: VertexOutput;
-                            out.clip_position = camera.view_proj * model.transform * vec4<f32>(input.position, 1.0);
-                            out.tex_coords = input.tex_coords;
-                            return out;
-                        }
-
-                        @group(1) @binding(0) var t_diffuse: texture_2d<f32>;
-                        @group(1) @binding(1) var s_diffuse: sampler;
-
-                        @fragment fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-                            return textureSample(t_diffuse, s_diffuse, in.tex_coords);
-                        }
-                    ".into()),
+                    label: Some("Mesh3D Blinn-Phong Shader"),
+                    source: wgpu::ShaderSource::Wgsl(include_str!("../assets/mesh3d.wgsl").into()),
                 });
 
                 let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -147,14 +136,29 @@ impl KnotenApp {
                     vertex: wgpu::VertexState {
                         module: &shader,
                         entry_point: Some("vs_main"),
-                        buffers: &[wgpu::VertexBufferLayout {
-                            array_stride: 20, // 5 * 4 bytes
-                            step_mode: wgpu::VertexStepMode::Vertex,
-                            attributes: &[
-                                wgpu::VertexAttribute { offset: 0, shader_location: 0, format: wgpu::VertexFormat::Float32x3 },
-                                wgpu::VertexAttribute { offset: 12, shader_location: 1, format: wgpu::VertexFormat::Float32x2 },
-                            ],
-                        }],
+                        buffers: &[
+                            wgpu::VertexBufferLayout {
+                                array_stride: std::mem::size_of::<crate::executor::VoxelVertex>() as wgpu::BufferAddress,
+                                step_mode: wgpu::VertexStepMode::Vertex,
+                                attributes: &[
+                                    wgpu::VertexAttribute { offset: 0, shader_location: 0, format: wgpu::VertexFormat::Float32x3 },
+                                    wgpu::VertexAttribute { offset: 12, shader_location: 1, format: wgpu::VertexFormat::Float32x3 },
+                                    wgpu::VertexAttribute { offset: 24, shader_location: 2, format: wgpu::VertexFormat::Float32x2 },
+                                ],
+                            },
+                            wgpu::VertexBufferLayout {
+                                array_stride: std::mem::size_of::<crate::executor::InstanceData>() as wgpu::BufferAddress,
+                                step_mode: wgpu::VertexStepMode::Instance,
+                                attributes: &[
+                                    wgpu::VertexAttribute { offset: 0, shader_location: 3, format: wgpu::VertexFormat::Float32x4 },
+                                    wgpu::VertexAttribute { offset: 16, shader_location: 4, format: wgpu::VertexFormat::Float32x4 },
+                                    wgpu::VertexAttribute { offset: 32, shader_location: 5, format: wgpu::VertexFormat::Float32x4 },
+                                    wgpu::VertexAttribute { offset: 48, shader_location: 6, format: wgpu::VertexFormat::Float32x4 },
+                                    wgpu::VertexAttribute { offset: 64, shader_location: 7, format: wgpu::VertexFormat::Float32x4 },
+                                    wgpu::VertexAttribute { offset: 80, shader_location: 8, format: wgpu::VertexFormat::Float32x4 },
+                                ],
+                            },
+                        ],
                         compilation_options: Default::default(),
                     },
                     fragment: Some(wgpu::FragmentState {
@@ -163,7 +167,12 @@ impl KnotenApp {
                         targets: &[Some(wgpu::ColorTargetState { format: config.format, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })],
                         compilation_options: Default::default(),
                     }),
-                    primitive: wgpu::PrimitiveState { topology: wgpu::PrimitiveTopology::TriangleList, ..Default::default() },
+                    primitive: wgpu::PrimitiveState { 
+                        topology: wgpu::PrimitiveTopology::TriangleList,
+                        front_face: wgpu::FrontFace::Ccw,
+                        cull_mode: Some(wgpu::Face::Back),
+                        ..Default::default() 
+                    },
                     depth_stencil: Some(wgpu::DepthStencilState {
                         format: wgpu::TextureFormat::Depth32Float,
                         depth_write_enabled: true,
@@ -259,10 +268,10 @@ impl KnotenApp {
                     window,
                     input,
                     surface,
+                    surface_format: config.format,
                     device,
                     queue,
                     pipeline,
-                    bind_group_layout,
                     width,
                     height,
                     clear_color: wgpu::Color::BLACK,
@@ -357,6 +366,34 @@ impl ApplicationHandler for KnotenApp {
                     } else {
                         input.keys.remove(&code);
                     }
+                }
+            }
+            WindowEvent::Resized(physical_size) => {
+                if physical_size.width > 0 && physical_size.height > 0 {
+                    state.width = physical_size.width;
+                    state.height = physical_size.height;
+                    
+                    let config = wgpu::SurfaceConfiguration {
+                        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                        format: wgpu::TextureFormat::Bgra8UnormSrgb, // Assuming standard format, ideally from state if stored
+                        width: state.width,
+                        height: state.height,
+                        present_mode: wgpu::PresentMode::Fifo,
+                        alpha_mode: wgpu::CompositeAlphaMode::Auto,
+                        view_formats: vec![],
+                        desired_maximum_frame_latency: 2,
+                    };
+                    state.surface.configure(&state.device, &config);
+
+                    let depth_texture = state.device.create_texture(&wgpu::TextureDescriptor {
+                        label: Some("Depth Texture"),
+                        size: wgpu::Extent3d { width: state.width, height: state.height, depth_or_array_layers: 1 },
+                        mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2,
+                        format: wgpu::TextureFormat::Depth32Float,
+                        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                        view_formats: &[],
+                    });
+                    state.depth_texture_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
                 }
             }
             WindowEvent::RedrawRequested => {

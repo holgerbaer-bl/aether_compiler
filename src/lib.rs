@@ -5,7 +5,6 @@ pub mod dsl_emitter;
 pub mod evaluator;
 pub mod executor;
 pub mod natives;
-pub mod renderer;
 pub mod window;
 pub mod optimizer;
 pub mod parser;
