@@ -119,6 +119,7 @@ pub struct RegistryWindowState {
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct RegistryVertex {
     pub position: [f32; 3],
+    pub normal: [f32; 3],   // Sprint 85: Added - required by mesh3d.wgsl @location(1)
     pub tex_coords: [f32; 2],
 }
 
@@ -850,13 +851,15 @@ fn generate_uv_sphere(rings: u32, sectors: u32) -> (Vec<RegistryVertex>, Vec<u32
         let phi = std::f32::consts::PI * (r as f32 / rings as f32);
         for s in 0..=sectors {
             let theta = 2.0 * std::f32::consts::PI * (s as f32 / sectors as f32);
-            let x = phi.sin() * theta.cos();
-            let y = phi.cos();
-            let z = phi.sin() * theta.sin();
+            let nx = phi.sin() * theta.cos();
+            let ny = phi.cos();
+            let nz = phi.sin() * theta.sin();
             let u = s as f32 / sectors as f32;
             let v = r as f32 / rings as f32;
+            // For a unit sphere, position == outward normal
             vertices.push(RegistryVertex {
-                position: [x, y, z],
+                position: [nx, ny, nz],
+                normal: [nx, ny, nz],
                 tex_coords: [u, v],
             });
         }
@@ -890,6 +893,21 @@ pub fn registry_draw_cube(
     if window_handle < 0 || texture_handle < 0 {
         return;
     }
+    // Sprint 85 FIX: send geometry the first time so the cache has a mesh to look up
+    let mesh_name = "cube".to_string();
+    let mut guard = SENT_MESHES.lock().unwrap();
+    let sent = guard.get_or_insert_with(HashSet::new);
+    if !sent.contains(&mesh_name) {
+        let (vertices, indices) = generate_cube();
+        send_render_command(RenderCommand::AddMesh {
+            name: mesh_name.clone(),
+            vertices,
+            indices,
+        });
+        sent.insert(mesh_name);
+    }
+    drop(guard);
+
     send_render_command(RenderCommand::DrawCube {
         window_id: window_handle as usize,
         texture_id: texture_handle as usize,
@@ -940,25 +958,26 @@ fn generate_cylinder(segments: u32) -> (Vec<RegistryVertex>, Vec<u32>) {
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
 
-    // Top center
-    vertices.push(RegistryVertex { position: [0.0, 0.5, 0.0], tex_coords: [0.5, 0.5] });
-    // Bottom center
-    vertices.push(RegistryVertex { position: [0.0, -0.5, 0.0], tex_coords: [0.5, 0.5] });
+    // Top center (normal points up)
+    vertices.push(RegistryVertex { position: [0.0, 0.5, 0.0], normal: [0.0, 1.0, 0.0], tex_coords: [0.5, 0.5] });
+    // Bottom center (normal points down)
+    vertices.push(RegistryVertex { position: [0.0, -0.5, 0.0], normal: [0.0, -1.0, 0.0], tex_coords: [0.5, 0.5] });
 
-    let base_idx_top = 0;
-    let base_idx_bottom = 1;
+    let base_idx_top: u32 = 0;
+    let base_idx_bottom: u32 = 1;
 
-    // Cycle through segments
     for i in 0..=segments {
         let theta = 2.0 * std::f32::consts::PI * (i as f32 / segments as f32);
         let x = theta.cos();
         let z = theta.sin();
         let u = i as f32 / segments as f32;
-
+        // Side normals point outward horizontally
+        let nx = x;
+        let nz = z;
         // Top cap vertex
-        vertices.push(RegistryVertex { position: [x, 0.5, z], tex_coords: [u, 0.0] });
+        vertices.push(RegistryVertex { position: [x, 0.5, z], normal: [nx, 0.0, nz], tex_coords: [u, 0.0] });
         // Bottom cap vertex
-        vertices.push(RegistryVertex { position: [x, -0.5, z], tex_coords: [u, 1.0] });
+        vertices.push(RegistryVertex { position: [x, -0.5, z], normal: [nx, 0.0, nz], tex_coords: [u, 1.0] });
     }
 
     for i in 0..segments {
@@ -968,22 +987,58 @@ fn generate_cylinder(segments: u32) -> (Vec<RegistryVertex>, Vec<u32>) {
         let bot1 = top1 + 1;
 
         // Side faces
-        indices.push(top0);
-        indices.push(bot0);
-        indices.push(top1);
-        indices.push(bot0);
-        indices.push(bot1);
-        indices.push(top1);
+        indices.push(top0); indices.push(bot0); indices.push(top1);
+        indices.push(bot0); indices.push(bot1); indices.push(top1);
 
         // Top cap
-        indices.push(base_idx_top);
-        indices.push(top1);
-        indices.push(top0);
+        indices.push(base_idx_top); indices.push(top1); indices.push(top0);
 
         // Bottom cap
-        indices.push(base_idx_bottom);
-        indices.push(bot0);
-        indices.push(bot1);
+        indices.push(base_idx_bottom); indices.push(bot0); indices.push(bot1);
+    }
+    (vertices, indices)
+}
+
+/// Sprint 85: Generate a unit cube with per-face flat normals.
+fn generate_cube() -> (Vec<RegistryVertex>, Vec<u32>) {
+    // 6 faces × 4 vertices = 24 vertices; 6 faces × 2 triangles × 3 = 36 indices
+    let faces: [([f32; 3], [[f32; 3]; 4], [[f32; 2]; 4]); 6] = [
+        // +Y top
+        ([0.0, 1.0, 0.0],
+         [[-0.5, 0.5, -0.5], [0.5, 0.5, -0.5], [0.5, 0.5, 0.5], [-0.5, 0.5, 0.5]],
+         [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]),
+        // -Y bottom
+        ([0.0, -1.0, 0.0],
+         [[-0.5, -0.5, 0.5], [0.5, -0.5, 0.5], [0.5, -0.5, -0.5], [-0.5, -0.5, -0.5]],
+         [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]),
+        // +Z front
+        ([0.0, 0.0, 1.0],
+         [[-0.5, -0.5, 0.5], [0.5, -0.5, 0.5], [0.5, 0.5, 0.5], [-0.5, 0.5, 0.5]],
+         [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]]),
+        // -Z back
+        ([0.0, 0.0, -1.0],
+         [[0.5, -0.5, -0.5], [-0.5, -0.5, -0.5], [-0.5, 0.5, -0.5], [0.5, 0.5, -0.5]],
+         [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]]),
+        // +X right
+        ([1.0, 0.0, 0.0],
+         [[0.5, -0.5, 0.5], [0.5, -0.5, -0.5], [0.5, 0.5, -0.5], [0.5, 0.5, 0.5]],
+         [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]]),
+        // -X left
+        ([-1.0, 0.0, 0.0],
+         [[-0.5, -0.5, -0.5], [-0.5, -0.5, 0.5], [-0.5, 0.5, 0.5], [-0.5, 0.5, -0.5]],
+         [[0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0]]),
+    ];
+
+    let mut vertices = Vec::with_capacity(24);
+    let mut indices = Vec::with_capacity(36);
+
+    for (face_idx, (normal, positions, uvs)) in faces.iter().enumerate() {
+        let base = (face_idx * 4) as u32;
+        for (pos, uv) in positions.iter().zip(uvs.iter()) {
+            vertices.push(RegistryVertex { position: *pos, normal: *normal, tex_coords: *uv });
+        }
+        // Two CCW triangles per face
+        indices.extend_from_slice(&[base, base+1, base+2, base, base+2, base+3]);
     }
     (vertices, indices)
 }

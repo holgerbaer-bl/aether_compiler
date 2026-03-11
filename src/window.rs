@@ -138,19 +138,20 @@ impl KnotenApp {
                         entry_point: Some("vs_main"),
                         buffers: &[
                             wgpu::VertexBufferLayout {
-                                array_stride: std::mem::size_of::<crate::executor::VoxelVertex>() as wgpu::BufferAddress,
+                                // RegistryVertex = [f32;3] position + [f32;3] normal + [f32;2] tex_coords = 32 bytes
+                                array_stride: std::mem::size_of::<crate::natives::registry::RegistryVertex>() as wgpu::BufferAddress,
                                 step_mode: wgpu::VertexStepMode::Vertex,
                                 attributes: &[
-                                    wgpu::VertexAttribute { offset: 0, shader_location: 0, format: wgpu::VertexFormat::Float32x3 },
-                                    wgpu::VertexAttribute { offset: 12, shader_location: 1, format: wgpu::VertexFormat::Float32x3 },
-                                    wgpu::VertexAttribute { offset: 24, shader_location: 2, format: wgpu::VertexFormat::Float32x2 },
+                                    wgpu::VertexAttribute { offset: 0,  shader_location: 0, format: wgpu::VertexFormat::Float32x3 }, // position
+                                    wgpu::VertexAttribute { offset: 12, shader_location: 1, format: wgpu::VertexFormat::Float32x3 }, // normal
+                                    wgpu::VertexAttribute { offset: 24, shader_location: 2, format: wgpu::VertexFormat::Float32x2 }, // uv
                                 ],
                             },
                             wgpu::VertexBufferLayout {
                                 array_stride: std::mem::size_of::<crate::executor::InstanceData>() as wgpu::BufferAddress,
                                 step_mode: wgpu::VertexStepMode::Instance,
                                 attributes: &[
-                                    wgpu::VertexAttribute { offset: 0, shader_location: 3, format: wgpu::VertexFormat::Float32x4 },
+                                    wgpu::VertexAttribute { offset: 0,  shader_location: 3, format: wgpu::VertexFormat::Float32x4 },
                                     wgpu::VertexAttribute { offset: 16, shader_location: 4, format: wgpu::VertexFormat::Float32x4 },
                                     wgpu::VertexAttribute { offset: 32, shader_location: 5, format: wgpu::VertexFormat::Float32x4 },
                                     wgpu::VertexAttribute { offset: 48, shader_location: 6, format: wgpu::VertexFormat::Float32x4 },
@@ -195,20 +196,42 @@ impl KnotenApp {
                 });
                 let depth_texture_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
+                // Sprint 85: create default 1x1 white texture first — needed by camera_bind_group entries 1/2/3
+                let default_texture = device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("Default Texture"),
+                    size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+                    mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2,
+                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                    view_formats: &[],
+                });
+                queue.write_texture(
+                    wgpu::ImageCopyTexture { texture: &default_texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+                    &[255, 255, 255, 255],
+                    wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(4), rows_per_image: Some(1) },
+                    wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+                );
+                let default_view = default_texture.create_view(&wgpu::TextureViewDescriptor::default());
+                let default_sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
+
+                // Sprint 85: MeshUniforms: mat4(64) + vec4 material(16) + vec4 pbr(16) + vec4 camera_pos(16) + 4×PointLight(32×4=128) = 240 bytes
                 let camera_buffer = device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("Camera Buffer"),
-                    size: 80, // Mat4 (64) + Vec4 (16)
+                    size: 240,
                     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                     mapped_at_creation: false,
                 });
 
+                // Sprint 85: Satisfy all 4 bindings of camera_bgl (uniform + diffuse tex + sampler + normal tex)
                 let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("Camera Bind Group"),
                     layout: &camera_bgl,
-                    entries: &[wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: camera_buffer.as_entire_binding(),
-                    }],
+                    entries: &[
+                        wgpu::BindGroupEntry { binding: 0, resource: camera_buffer.as_entire_binding() },
+                        wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&default_view) },
+                        wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&default_sampler) },
+                        wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&default_view) },
+                    ],
                 });
 
                 let model_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -227,23 +250,7 @@ impl KnotenApp {
                     }],
                 });
 
-                let default_texture = device.create_texture(&wgpu::TextureDescriptor {
-                    label: Some("Default Texture"),
-                    size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
-                    mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2,
-                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                    usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                    view_formats: &[],
-                });
-                queue.write_texture(
-                    wgpu::ImageCopyTexture { texture: &default_texture, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
-                    &[255, 255, 255, 255],
-                    wgpu::ImageDataLayout { offset: 0, bytes_per_row: Some(4), rows_per_image: Some(1) },
-                    wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
-                );
-                let default_view = default_texture.create_view(&wgpu::TextureViewDescriptor::default());
-                let default_sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
-
+                // Default material bind group (material BGL has only binding 0/1 = texture/sampler)
                 let default_texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("Default Material Bind Group"),
                     layout: &material_bgl,
@@ -259,10 +266,6 @@ impl KnotenApp {
                     mouse_dy: 0.0,
                     last_char: 0,
                 }));
-
-                // Register in the global registry (we need to find the entry and update it)
-                // Actually, the registry already has a WindowProxy with this input Arc.
-                // We just need to associate it here.
 
                 self.windows.insert(id, RegistryWindowState {
                     window,
@@ -288,6 +291,7 @@ impl KnotenApp {
                     default_texture_bind_group,
                     commands: Vec::new(),
                 });
+
             }
             RenderCommand::UpdateWindow(id) => {
                 if let Some(state) = self.windows.get_mut(&id) {
@@ -372,10 +376,10 @@ impl ApplicationHandler for KnotenApp {
                 if physical_size.width > 0 && physical_size.height > 0 {
                     state.width = physical_size.width;
                     state.height = physical_size.height;
-                    
+                    // Sprint 85 FIX: use stored surface_format instead of hardcoded Bgra8UnormSrgb
                     let config = wgpu::SurfaceConfiguration {
                         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                        format: wgpu::TextureFormat::Bgra8UnormSrgb, // Assuming standard format, ideally from state if stored
+                        format: state.surface_format,
                         width: state.width,
                         height: state.height,
                         present_mode: wgpu::PresentMode::Fifo,
@@ -397,6 +401,20 @@ impl ApplicationHandler for KnotenApp {
                 }
             }
             WindowEvent::RedrawRequested => {
+                // Sprint 85: write a real default view-proj matrix to the camera UBO each frame.
+                // The MeshUniforms struct starts with view_proj (mat4x4 = 64 bytes at offset 0).
+                // Default: perspective 60°, camera at (0,0,5) looking at origin.
+                let aspect = state.width as f32 / state.height.max(1) as f32;
+                let proj = glam::Mat4::perspective_rh(60_f32.to_radians(), aspect, 0.1, 1000.0);
+                let view = glam::Mat4::look_at_rh(
+                    glam::Vec3::new(0.0, 2.0, 5.0),
+                    glam::Vec3::ZERO,
+                    glam::Vec3::Y,
+                );
+                let view_proj = proj * view;
+                // Only write the first 64 bytes (view_proj); rest stays zeroed (no lights = ambient only)
+                state.queue.write_buffer(&state.camera_buffer, 0, bytemuck::cast_slice(&view_proj.to_cols_array()));
+
                 // Here we process all pending RenderCommands for this window
                 let output = state.surface.get_current_texture().unwrap();
                 let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());

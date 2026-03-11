@@ -26,6 +26,7 @@ KnotenCore is built for AI-driven execution, which requires strict security:
 - **Sprint 80 (Phase 2): VRAM Rescue (Geometry Caching)**. Optimized 3D primitive rendering with geometry reuse and dynamic scaling. [x]
 - **Sprint 81: Primitive Resurrection & Mat4Mul**. Restored Sphere/Cylinder geometry generation and implemented 4x4 matrix multiplication in the evaluator. [x]
 - **Sprint 83: Emergency Security & Architecture Fix**. Closed 6 Audit Round 6 findings (network sandbox, FS path traversal, VM panics, unsound Sync, scope logic). [x]
+- **Sprint 85: Real Renderer Port**. Fixed fake rendering pipeline: added normals to vertex layout, `generate_cube()`, correct camera bind group (4 bindings), view-proj UBO write, resize surface_format, removed ~20 dead WGPU fields from ExecutionEngine. [x]
 
 The runner enforces a **"Deny-by-Default"** policy for all I/O:
 - **`FS Read/Write`**: Disabled by default. Paths are canonicalized and verified to not escape the working directory, preventing `../../etc/passwd`-class attacks.

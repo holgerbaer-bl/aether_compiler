@@ -3,6 +3,29 @@
 **Vision:** A high-performance, general-purpose hybrid language (JIT/AOT) with native WGPU rendering and deterministic ARC memory management.
 **Development Standard:** To ensure absolute version integrity, the architect must guarantee that every single sprint is cleanly pushed to the Git repository by the autonomous agent. This successful push must be explicitly documented in every sprint report.
 
+## [v0.85.0] - Sprint 85: Real Renderer Port (2026-03-11)
+Replaced the partially-fake 3D rendering pipeline with a fully correct WGPU implementation.
+
+### Fixed — Rendering (Real, Not Fake)
+- **FINDING-4 — Vertex Layout**: Added `pub normal: [f32; 3]` to `RegistryVertex` in `registry.rs`. Layout now matches `mesh3d.wgsl`: `@location(0) position`, `@location(1) normal`, `@location(2) uv`.
+- **FINDING-4 — Geometry Normals**: `generate_uv_sphere` now outputs correct outward normals (position = normal for unit sphere). `generate_cylinder` outputs upward/downward cap normals and outward side normals.
+- **FINDING-4 — Missing Cube Geometry**: Added `generate_cube()` function producing a 24-vertex, 36-index unit cube with per-face flat normals. `registry_draw_cube` now sends `AddMesh` the first time it is called, so the cube actually appears.
+- **FINDING-1 — Pipeline Vertex Stride**: Changed vertex buffer layout in `window.rs` from `size_of::<VoxelVertex>()` (32 bytes, now unused here) to `size_of::<RegistryVertex>()` (32 bytes, correct). The struct sizes happen to match, but the attribute layout (position/normal/uv vs position/uv) was wrong.
+- **FINDING-3 — Camera Bind Group**: The `camera_bgl` declares 4 bindings (0=uniform, 1=diffuse tex, 2=sampler, 3=normal map). `camera_bind_group` previously only filled binding 0 — GPU validation would fail or garbage data rendered. Now all 4 bindings are satisfied with the white 1×1 default texture/sampler as fallbacks.
+- **FINDING-3 — Camera UBO Content**: The camera buffer was zero-filled every frame (no matrix written). `RedrawRequested` now writes a real `perspective_rh × look_at_rh` view-projection matrix at offset 0 of the 240-byte `MeshUniforms` buffer.
+- **FINDING-2 — Resize Surface Format**: `WindowEvent::Resized` used hardcoded `Bgra8UnormSrgb` instead of the stored `state.surface_format`. Fixed to use `state.surface_format`.
+- **Init Order Fix**: Default texture+sampler are now created *before* the camera bind group so their views can be referenced in entries 1/2/3.
+
+### Fixed — Camera Buffer Size
+- Camera buffer resized from 80 bytes (`Mat4 + Vec4`) to 240 bytes (full `MeshUniforms`: `mat4 + 3×vec4 + 4×PointLight`).
+
+### Removed — Zombie Code (executor.rs)
+Deleted ~20 dead WGPU fields from `ExecutionEngine` that were never read after the Sprint 72 architecture migration to `window.rs`:
+`device`, `queue`, `surface_format`, `depth_texture_view`, `current_canvas_view`, `current_canvas_frame`, `default_texture_view`, `default_sampler`, `shaders`, `render_pipelines`, `voxel_pipeline`, `voxel_vbo`, `voxel_ibo`, `voxel_instances`, `voxel_bind_group`, `voxel_atlas_bind_group`, `voxel_ubo`, `voxel_instance_buffer`, `mesh_cache`, `frame_encoder`, `mesh_ubo`, `meshes`, `textures`, `canvas_mesh_pipeline`.
+Also deleted the now-unused `MeshBuffers` struct.
+
+---
+
 ## [v0.83.0] - Sprint 83: Emergency Security & Architecture Fix (2026-03-11)
 Closed 6 critical findings from Audit Round 6. Full sandbox hardening pass.
 
