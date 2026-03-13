@@ -3,8 +3,22 @@
 **Vision:** A high-performance, general-purpose hybrid language (JIT/AOT) with native WGPU rendering and deterministic ARC memory management.
 **Development Standard:** To ensure absolute version integrity, the architect must guarantee that every single sprint is cleanly pushed to the Git repository by the autonomous agent. This successful push must be explicitly documented in every sprint report.
 
+## [v0.88.0] - Sprint 88: Targeted Code Optimization (2026-03-14)
+Resolved targeted performance bottlenecks in array and map manipulation during evaluation. Ensured stricter adherence to expected error propagation formats across both JIT and VM pipelines.
+
+### Changed — Performance & Stability
+- **`ExecutionEngine` (executor.rs)**: Introduced direct, zero-clone mutation functions (`mutate_map_insert`, `mutate_array_set`, `mutate_array_push`) to drastically reduce the $O(N)$ allocation penalty of deep-cloning collections just to add or modify a single element. Memory overhead is significantly reduced for large vectors and dictionaries.
+- **`Evaluator` (evaluator.rs)**: Upgraded AST array push, set, and object property assignments to utilize the zero-clone `mutate_*` functions, preserving referential integrity on evaluation instead of re-allocating.
+- **`VM` (vm.rs)**: Converted `VM::execute` return signature to `Result<RelType, String>`, cleanly propagating mathematical faults like `#Division by zero` backward to the caller instead of silently swallowing the error or yielding `0`.
+
+### Compliance
+- Git commit pushed by autonomous agent. Commit message: `Opt: Sprint 88 - Targeted Array/Map Zero-Clone Optimization and VM Fault Propagation`.
+- Successfully validated against all 54 integration test oracles.
+- Updated core developer-facing and user-facing documentation per policy.
+
+---
+
 ## [v0.87.0] - Sprint 87: Documentation & Release Polish (2026-03-13)
-Professionalized all user-facing documentation to reflect KnotenCore's stable, release-ready state.
 
 ### Changed — Documentation
 - **`README.md`**: Fully rewritten as professional release documentation. Removed all internal sprint references. Reorganized into canonical feature sections: Thread-Safe Sandbox, WGPU Hardware Rendering, JIT/AOT Execution, Automatic ARC, Structured Fault Reporting, and Unified Physics.

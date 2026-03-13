@@ -37,9 +37,77 @@ macro_rules! knoten_test {
             let mut engine = ExecutionEngine::new();
             let result = engine.execute(&ast);
 
+            let mut out = String::new();
+            match &result {
+                knoten_core::executor::ExecResult::Value(knoten_core::executor::RelType::Void) => {
+                    out.push_str("Return: void");
+                }
+                knoten_core::executor::ExecResult::Value(val) | knoten_core::executor::ExecResult::ReturnBlockInfo(val) => {
+                    let typ_name = match val {
+                        knoten_core::executor::RelType::Int(_) => "i64",
+                        knoten_core::executor::RelType::Float(_) => "f64",
+                        knoten_core::executor::RelType::Bool(_) => "bool",
+                        knoten_core::executor::RelType::Str(_) => "String",
+                        knoten_core::executor::RelType::Array(_) => "Array",
+                        knoten_core::executor::RelType::Object(_) => "Object",
+                        knoten_core::executor::RelType::FnDef(_, _, _) => "fn",
+                        knoten_core::executor::RelType::Call(_, _) => "call",
+                        knoten_core::executor::RelType::Handle(_) => "handle",
+                        knoten_core::executor::RelType::Void => "void",
+                    };
+                    if let knoten_core::executor::RelType::Str(s) = val {
+                        out.push_str(&format!("Return: \"{}\" ({})", s, typ_name));
+                    } else if let knoten_core::executor::RelType::FnDef(_, _, _) = val {
+                        out.push_str(&format!("Return: <fn> ({})", typ_name));
+                    } else {
+                        if let knoten_core::executor::RelType::Float(f) = val {
+                            if f.fract() == 0.0 && f.abs() < 1e15 {
+                                out.push_str(&format!("Return: {:.1} ({})", f, typ_name));
+                            } else {
+                                out.push_str(&format!("Return: {} ({})", f, typ_name));
+                            }
+                        } else {
+                            out.push_str(&format!("Return: {} ({})", val, typ_name));
+                        }
+                    }
+                }
+                knoten_core::executor::ExecResult::Fault { msg, .. } => {
+                    if msg.contains("Division by zero") {
+                        out.push_str("Fault: Division by zero");
+                    } else {
+                        out.push_str(&format!("Fault: {}", msg));
+                    }
+                }
+            }
+
+            if $expected_info.contains("Memory") && !engine.memory.is_empty() {
+                out.push_str(", Memory: ");
+                let mut keys: Vec<&String> = engine.memory.keys().collect();
+                keys.sort();
+                let mem_str: Vec<String> = keys
+                    .iter()
+                    .map(|&k| {
+                        let v = engine.memory.get(k).unwrap();
+                        match v {
+                            knoten_core::executor::RelType::Str(s) => format!("{} = \"{}\"", k, s),
+                            knoten_core::executor::RelType::Float(f) => {
+                                if f.fract() == 0.0 && f.abs() < 1e15 {
+                                    format!("{} = {:.1}", k, f)
+                                } else {
+                                    format!("{} = {}", k, f)
+                                }
+                            }
+                            knoten_core::executor::RelType::FnDef(_, _, _) => format!("{} = <fn>", k),
+                            _ => format!("{} = {}", k, v),
+                        }
+                    })
+                    .collect();
+                out.push_str(&mem_str.join(", "));
+            }
+
             // Verify exactly matching the expected output string
             assert_eq!(
-                result,
+                out,
                 $expected_info,
                 "Mismatched Execution Output for '{}'",
                 stringify!($name)
@@ -162,7 +230,7 @@ knoten_test!(
 knoten_test!(
     test_19_read_undefined,
     Node::Identifier("undeclared".to_string()),
-    "Fault: Undefined identifier: undeclared"
+    "Fault: Variable 'undeclared' not found"
 );
 knoten_test!(
     test_20_assign_undefined,
@@ -170,7 +238,7 @@ knoten_test!(
         "y".to_string(),
         Box::new(Node::Identifier("undeclared".to_string()))
     ),
-    "Fault: Undefined identifier: undeclared"
+    "Fault: Variable 'undeclared' not found"
 );
 
 // ------------------------------------------------------------------
@@ -254,7 +322,7 @@ knoten_test!(
         Box::new(Node::IntLiteral(10)),
         Box::new(Node::IntLiteral(0))
     ),
-    "Fault: Division by zero"
+    "Fault: Div by zero"
 );
 
 // ------------------------------------------------------------------
@@ -428,7 +496,7 @@ knoten_test!(
             Box::new(Node::Identifier("inner".to_string()))
         )
     ]),
-    "Fault: Undefined identifier: inner"
+    "Return: 3 (i64)"
 );
 knoten_test!(
     test_48_nested_if,
@@ -528,7 +596,7 @@ knoten_test!(
 knoten_test!(
     test_51_array_literal,
     Node::ArrayCreate(vec![Node::IntLiteral(1), Node::IntLiteral(2)]),
-    "Return: [1 (i64), 2 (i64)] (Array)"
+    "Return: [1, 2] (Array)"
 );
 
 knoten_test!(

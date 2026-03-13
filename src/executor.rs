@@ -268,6 +268,62 @@ impl ExecutionEngine {
         self.memory.insert(name, val);
     }
 
+    /// Sprint 88 Optimization: In-place Map Insertion
+    /// Avoids cloning the entire HashMap when setting or adding a single key
+    pub fn mutate_map_insert(&mut self, name: &str, key: String, val: RelType) -> Result<Option<RelType>, ExecResult> {
+        for frame in self.call_stack.iter_mut().rev() {
+            if let Some(RelType::Object(m)) = frame.locals.get_mut(name) {
+                return Ok(m.insert(key, val));
+            } else if frame.locals.contains_key(name) {
+                return Err(ExecResult::Fault { msg: "Target is not a map/object".into(), node: "Node::MapSet/PropertySet".into() });
+            }
+        }
+        if let Some(RelType::Object(m)) = self.memory.get_mut(name) {
+            return Ok(m.insert(key, val));
+        }
+        Err(ExecResult::Fault { msg: "Target is not a map/object".into(), node: "Node::MapSet/PropertySet".into() })
+    }
+
+    /// Sprint 88 Optimization: In-place Array Modification
+    /// Avoids cloning the entire Vec when setting a single index
+    pub fn mutate_array_set(&mut self, name: &str, idx: usize, val: RelType) -> Result<RelType, ExecResult> {
+        for frame in self.call_stack.iter_mut().rev() {
+            if let Some(RelType::Array(a)) = frame.locals.get_mut(name) {
+                if idx < a.len() {
+                    return Ok(std::mem::replace(&mut a[idx], val));
+                }
+                return Err(ExecResult::Fault { msg: format!("Index {} out of bounds", idx), node: "Node::ArraySet".into() });
+            } else if frame.locals.contains_key(name) {
+                return Err(ExecResult::Fault { msg: "Target is not an array".into(), node: "Node::ArraySet".into() });
+            }
+        }
+        if let Some(RelType::Array(a)) = self.memory.get_mut(name) {
+            if idx < a.len() {
+                return Ok(std::mem::replace(&mut a[idx], val));
+            }
+            return Err(ExecResult::Fault { msg: format!("Index {} out of bounds", idx), node: "Node::ArraySet".into() });
+        }
+        Err(ExecResult::Fault { msg: "Target is not an array".into(), node: "Node::ArraySet".into() })
+    }
+
+    /// Sprint 88 Optimization: In-place Array Push
+    /// Avoids cloning the entire Vec when pushing a single item
+    pub fn mutate_array_push(&mut self, name: &str, val: RelType) -> Result<(), ExecResult> {
+        for frame in self.call_stack.iter_mut().rev() {
+            if let Some(RelType::Array(a)) = frame.locals.get_mut(name) {
+                a.push(val);
+                return Ok(());
+            } else if frame.locals.contains_key(name) {
+                return Err(ExecResult::Fault { msg: "Target is not an array".into(), node: "Node::ArrayPush".into() });
+            }
+        }
+        if let Some(RelType::Array(a)) = self.memory.get_mut(name) {
+            a.push(val);
+            return Ok(());
+        }
+        Err(ExecResult::Fault { msg: "Target is not an array".into(), node: "Node::ArrayPush".into() })
+    }
+
     pub fn release_handles(&self, _val: &RelType) {
         // FINDING-01 ANALYSIS: This is intentionally a no-op.
         // NativeHandle implements Drop, which calls registry_release automatically.

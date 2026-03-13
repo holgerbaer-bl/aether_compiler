@@ -106,23 +106,23 @@ impl ExecutionEngine {
             Node::ArraySet(arr_expr, idx_expr, val_expr) => {
                 let val = match self.evaluate_inner(val_expr) { ExecResult::Value(v) => v, err => return err };
                 if let Node::Identifier(name) = &**arr_expr {
-                    let mut a = match self.get_var(name) { Some(RelType::Array(v)) => v, _ => return ExecResult::Fault { msg: "Target is not an array".into(), node: "Node::ArraySet".into() } };
                     let i = match self.evaluate_inner(idx_expr) { ExecResult::Value(RelType::Int(v)) => v as usize, _ => return ExecResult::Fault { msg: "Index is not an integer".into(), node: "Node::ArraySet".into() } };
-                    if i < a.len() { 
-                        let old = std::mem::replace(&mut a[i], val.clone());
-                        self.release_handles(&old);
-                        self.set_var(name.clone(), RelType::Array(a));
-                        ExecResult::Value(val)
-                    } else { ExecResult::Fault { msg: format!("Index {} out of bounds", i), node: "Node::ArraySet".into() } }
+                    match self.mutate_array_set(name, i, val.clone()) {
+                        Ok(old) => {
+                            self.release_handles(&old);
+                            ExecResult::Value(val)
+                        }
+                        Err(err) => err,
+                    }
                 } else { ExecResult::Fault { msg: "ArraySet only supported on identifiers currently".into(), node: "Node::ArraySet".into() } }
             }
             Node::ArrayPush(arr_expr, val_expr) => {
                 let val = match self.evaluate_inner(val_expr) { ExecResult::Value(v) => v, err => return err };
                 if let Node::Identifier(name) = &**arr_expr {
-                    let mut a = match self.get_var(name) { Some(RelType::Array(v)) => v, _ => return ExecResult::Fault { msg: "Target is not an array".into(), node: "Node::ArrayPush".into() } };
-                    a.push(val.clone());
-                    self.set_var(name.clone(), RelType::Array(a));
-                    ExecResult::Value(val)
+                    match self.mutate_array_push(name, val.clone()) {
+                        Ok(()) => ExecResult::Value(val),
+                        Err(err) => err,
+                    }
                 } else { ExecResult::Fault { msg: "ArrayPush only supported on identifiers currently".into(), node: "Node::ArrayPush".into() } }
             }
             Node::ArrayLen(arr) => {
@@ -141,11 +141,14 @@ impl ExecutionEngine {
             Node::MapSet(map_expr, key_expr, val_expr) => {
                 let val = match self.evaluate_inner(val_expr) { ExecResult::Value(v) => v, err => return err };
                 if let Node::Identifier(name) = &**map_expr {
-                    let mut m = match self.get_var(name) { Some(RelType::Object(v)) => v, _ => return ExecResult::Fault { msg: "Target is not a map/object".into(), node: "Node::MapSet".into() } };
                     let k = match self.evaluate_inner(key_expr) { ExecResult::Value(RelType::Str(v)) => v, _ => return ExecResult::Fault { msg: "Key is not a string".into(), node: "Node::MapSet".into() } };
-                    if let Some(old) = m.insert(k, val.clone()) { self.release_handles(&old); }
-                    self.set_var(name.clone(), RelType::Object(m));
-                    ExecResult::Value(val)
+                    match self.mutate_map_insert(name, k, val.clone()) {
+                        Ok(old_opt) => {
+                            if let Some(old) = old_opt { self.release_handles(&old); }
+                            ExecResult::Value(val)
+                        }
+                        Err(err) => err,
+                    }
                 } else { ExecResult::Fault { msg: "MapSet only supported on identifiers currently".into(), node: "Node::MapSet".into() } }
             }
             Node::MapHasKey(map_expr, key_expr) => {
@@ -170,10 +173,13 @@ impl ExecutionEngine {
             Node::PropertySet(obj_expr, prop, val_expr) => {
                 let val = match self.evaluate_inner(val_expr) { ExecResult::Value(v) => v, err => return err };
                 if let Node::Identifier(name) = &**obj_expr {
-                    let mut o = match self.get_var(name) { Some(RelType::Object(v)) => v, _ => return ExecResult::Fault { msg: "Target is not an object".into(), node: "Node::PropertySet".into() } };
-                    if let Some(old) = o.insert(prop.clone(), val.clone()) { self.release_handles(&old); }
-                    self.set_var(name.clone(), RelType::Object(o));
-                    ExecResult::Value(val)
+                    match self.mutate_map_insert(name, prop.clone(), val.clone()) {
+                        Ok(old_opt) => {
+                            if let Some(old) = old_opt { self.release_handles(&old); }
+                            ExecResult::Value(val)
+                        }
+                        Err(err) => err,
+                    }
                 } else { ExecResult::Fault { msg: "PropertySet only supported on identifiers currently".into(), node: "Node::PropertySet".into() } }
             }
             Node::Index(container, idx) => {

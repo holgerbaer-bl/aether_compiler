@@ -109,7 +109,7 @@ impl VM {
     }
 
     #[inline(always)]
-    pub fn execute(&mut self, code: &[Opcode]) -> RelType {
+    pub fn execute(&mut self, code: &[Opcode]) -> Result<RelType, String> {
         self.stack.clear();
 
         for op in code {
@@ -122,16 +122,9 @@ impl VM {
                     let l = self.stack.pop().unwrap_or(RelType::Void);
                     match (l, r) {
                         (RelType::Int(a), RelType::Int(b)) => self.stack.push(RelType::Int(a + b)),
-                        (RelType::Float(a), RelType::Float(b)) => {
-                            self.stack.push(RelType::Float(a + b))
-                        }
-                        (RelType::Int(a), RelType::Float(b)) => {
-                            self.stack.push(RelType::Float(a as f64 + b))
-                        }
-                        (RelType::Float(a), RelType::Int(b)) => {
-                            self.stack.push(RelType::Float(a + b as f64))
-                        }
-                        // FINDING-06 FIX: Type mismatch yields Void instead of panic
+                        (RelType::Float(a), RelType::Float(b)) => self.stack.push(RelType::Float(a + b)),
+                        (RelType::Int(a), RelType::Float(b)) => self.stack.push(RelType::Float(a as f64 + b)),
+                        (RelType::Float(a), RelType::Int(b)) => self.stack.push(RelType::Float(a + b as f64)),
                         _ => self.stack.push(RelType::Void),
                     }
                 }
@@ -140,16 +133,9 @@ impl VM {
                     let l = self.stack.pop().unwrap_or(RelType::Void);
                     match (l, r) {
                         (RelType::Int(a), RelType::Int(b)) => self.stack.push(RelType::Int(a - b)),
-                        (RelType::Float(a), RelType::Float(b)) => {
-                            self.stack.push(RelType::Float(a - b))
-                        }
-                        (RelType::Int(a), RelType::Float(b)) => {
-                            self.stack.push(RelType::Float(a as f64 - b))
-                        }
-                        (RelType::Float(a), RelType::Int(b)) => {
-                            self.stack.push(RelType::Float(a - b as f64))
-                        }
-                        // FINDING-06 FIX: Type mismatch yields Void instead of panic
+                        (RelType::Float(a), RelType::Float(b)) => self.stack.push(RelType::Float(a - b)),
+                        (RelType::Int(a), RelType::Float(b)) => self.stack.push(RelType::Float(a as f64 - b)),
+                        (RelType::Float(a), RelType::Int(b)) => self.stack.push(RelType::Float(a - b as f64)),
                         _ => self.stack.push(RelType::Void),
                     }
                 }
@@ -158,16 +144,9 @@ impl VM {
                     let l = self.stack.pop().unwrap_or(RelType::Void);
                     match (l, r) {
                         (RelType::Int(a), RelType::Int(b)) => self.stack.push(RelType::Int(a * b)),
-                        (RelType::Float(a), RelType::Float(b)) => {
-                            self.stack.push(RelType::Float(a * b))
-                        }
-                        (RelType::Int(a), RelType::Float(b)) => {
-                            self.stack.push(RelType::Float(a as f64 * b))
-                        }
-                        (RelType::Float(a), RelType::Int(b)) => {
-                            self.stack.push(RelType::Float(a * b as f64))
-                        }
-                        // FINDING-06 FIX: Type mismatch yields Void instead of panic
+                        (RelType::Float(a), RelType::Float(b)) => self.stack.push(RelType::Float(a * b)),
+                        (RelType::Int(a), RelType::Float(b)) => self.stack.push(RelType::Float(a as f64 * b)),
+                        (RelType::Float(a), RelType::Int(b)) => self.stack.push(RelType::Float(a * b as f64)),
                         _ => self.stack.push(RelType::Void),
                     }
                 }
@@ -175,13 +154,14 @@ impl VM {
                     let r = self.stack.pop().unwrap_or(RelType::Void);
                     let l = self.stack.pop().unwrap_or(RelType::Void);
                     match (l, r) {
-                        (RelType::Int(a), RelType::Int(b)) => self
-                            .stack
-                            .push(RelType::Int(if b != 0 { a / b } else { 0 })),
-                        (RelType::Float(a), RelType::Float(b)) => self
-                            .stack
-                            .push(RelType::Float(if b != 0.0 { a / b } else { 0.0 })),
-                        // FINDING-06 FIX: Type mismatch yields Void instead of panic
+                        (RelType::Int(a), RelType::Int(b)) => {
+                            if b == 0 { return Err("Div by zero".into()); }
+                            self.stack.push(RelType::Int(a / b))
+                        },
+                        (RelType::Float(a), RelType::Float(b)) => {
+                            if b == 0.0 { return Err("Div by zero".into()); }
+                            self.stack.push(RelType::Float(a / b))
+                        },
                         _ => self.stack.push(RelType::Void),
                     }
                 }
@@ -195,9 +175,7 @@ impl VM {
                     let l = self.stack.pop().unwrap_or(RelType::Void);
                     match (l, r) {
                         (RelType::Int(a), RelType::Int(b)) => self.stack.push(RelType::Bool(a < b)),
-                        (RelType::Float(a), RelType::Float(b)) => {
-                            self.stack.push(RelType::Bool(a < b))
-                        }
+                        (RelType::Float(a), RelType::Float(b)) => self.stack.push(RelType::Bool(a < b)),
                         _ => self.stack.push(RelType::Bool(false)),
                     }
                 }
@@ -206,15 +184,13 @@ impl VM {
                     let l = self.stack.pop().unwrap_or(RelType::Void);
                     match (l, r) {
                         (RelType::Int(a), RelType::Int(b)) => self.stack.push(RelType::Bool(a > b)),
-                        (RelType::Float(a), RelType::Float(b)) => {
-                            self.stack.push(RelType::Bool(a > b))
-                        }
+                        (RelType::Float(a), RelType::Float(b)) => self.stack.push(RelType::Bool(a > b)),
                         _ => self.stack.push(RelType::Bool(false)),
                     }
                 }
             }
         }
 
-        self.stack.pop().unwrap_or(RelType::Void)
+        Ok(self.stack.pop().unwrap_or(RelType::Void))
     }
 }
