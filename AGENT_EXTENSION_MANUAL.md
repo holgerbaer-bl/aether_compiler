@@ -160,7 +160,7 @@ Or via `NativeCall` (no AST change needed, only registry function):
 
 ---
 
-## Checklist
+## Extension Checklist
 
 - [ ] Added `Node::YourNode` variant in `ast.rs`
 - [ ] Added `NativeHandle::YourType` (if needed) in `registry.rs`
@@ -171,14 +171,15 @@ Or via `NativeCall` (no AST change needed, only registry function):
 - [ ] Updated `optimizer.rs` → `count_nodes()` and `optimize()` matches
 - [ ] Run `cargo test` — all 54+ tests green
 - [ ] Created example `.nod` script to verify
+
 ---
 
-## Sprint 67: High-Performance 2D & Game Engine Evolution
+## High-Performance 2D Rendering Guidelines
 
-KnotenCore has evolved from a pure UI execution engine into a **hybrid Game Engine**. To maintain 60+ FPS in graphical applications, follow these strict performance guidelines.
+To maintain 60+ FPS in graphical applications, follow these strict performance guidelines.
 
 ### 🔴 Anti-Pattern: Layout Abuse
-**Never** use `UIHorizontal`, `UIVertical`, or `UIGrid` with many `UIButton` nodes to draw game boards, tile maps, or particle systems. 
+**Never** use `UIHorizontal`, `UIVertical`, or `UIGrid` with many `UIButton` nodes to draw game boards, tile maps, or particle systems.
 - **Reason**: These nodes trigger the EGUI layout and widget reconciliation logic, which is too slow for 64+ elements updating every frame.
 
 ### 🟢 Best Practice: Native 2D Primitives
@@ -188,7 +189,7 @@ KnotenCore has evolved from a pure UI execution engine into a **hybrid Game Engi
 **Example: Efficient 8x8 Grid**
 ```json
 {
-  "While": [ ... loop 64 times ...
+  "While": [ "... loop 64 times ...",
     {
       "DrawRect": {
         "x": { "Identifier": "px" },
@@ -207,16 +208,12 @@ Use `UIFillParent` inside a `UIFullscreen` or `UIWindow` to claim the entire ren
 
 ---
 
-## Sprint 78: Error Tracing Foundation (Diagnostic Context)
+## Structured Fault Reporting
 
-To enable robust **Self-Healing**, the engine now provides structured error reports.
-
-### 1. The Structured `Fault`
 When an operation fails (e.g., division by zero, invalid handle, permission denied), the engine returns an `ExecResult::Fault` with two fields:
 - **`msg`**: A human-readable description of what went wrong.
 - **`node`**: The exact AST node or native function where the error originated (e.g., `"Node::MathDiv"`, `"Native::IO::ReadFile"`).
 
-### 2. Implementation for AI Agents
 When extending the engine, you **must** provide this context. Avoid generic error strings.
 
 **JIT Implementation (`executor.rs` or `evaluator.rs`):**
@@ -235,6 +232,6 @@ Some(ExecResult::Fault {
 })
 ```
 
-### AI Best Practice:
-- **Parse the Node**: When you receive an error, look at the `node` field first. It tells you exactly which part of your generated DSL failed, bypassing the need to "guess" based on the error message alone.
-- **Immediate Self-Healing**: Use the `node` context to identify the specific code block in your memory that needs regeneration or adjustment.
+### AI Best Practice
+- **Parse the Node**: When you receive an error, look at the `node` field first. It tells you exactly which part of your generated DSL failed.
+- **Immediate Self-Healing**: Use the `node` context to identify the specific code block that needs regeneration or adjustment.

@@ -3,6 +3,19 @@
 **Vision:** A high-performance, general-purpose hybrid language (JIT/AOT) with native WGPU rendering and deterministic ARC memory management.
 **Development Standard:** To ensure absolute version integrity, the architect must guarantee that every single sprint is cleanly pushed to the Git repository by the autonomous agent. This successful push must be explicitly documented in every sprint report.
 
+## [v0.87.0] - Sprint 87: Documentation & Release Polish (2026-03-13)
+Professionalized all user-facing documentation to reflect KnotenCore's stable, release-ready state.
+
+### Changed — Documentation
+- **`README.md`**: Fully rewritten as professional release documentation. Removed all internal sprint references. Reorganized into canonical feature sections: Thread-Safe Sandbox, WGPU Hardware Rendering, JIT/AOT Execution, Automatic ARC, Structured Fault Reporting, and Unified Physics.
+- **`llm.md`**: Fully rewritten as a clean AI Agent Reference. All "Sprint XX:" section headers replaced with descriptive, feature-based headings. All technical content (code examples, security rules, ARC patterns, JSON snippets) preserved and verified against current engine state.
+- **`AGENT_EXTENSION_MANUAL.md`**: Removed all internal sprint-labeled section headers. Technical extension instructions remain intact.
+
+### Compliance
+- Git commit pushed by autonomous agent. Commit message: `Docs: Sprint 87 - Professionalize Documentation and Remove Sprint History`.
+
+---
+
 ## [v0.86.0] - Sprint 86: WGPU Pipeline Forging (2026-03-11)
 Completed the real WGPU rendering pipeline per Audit v7 findings.
 
