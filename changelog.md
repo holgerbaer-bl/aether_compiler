@@ -3,8 +3,20 @@
 **Vision:** A high-performance, general-purpose hybrid language (JIT/AOT) with native WGPU rendering and deterministic ARC memory management.
 **Development Standard:** To ensure absolute version integrity, the architect must guarantee that every single sprint is cleanly pushed to the Git repository by the autonomous agent. This successful push must be explicitly documented in every sprint report.
 
+## [v0.95.0] - Sprint 95: Implement AST-to-Bytecode Compilation (2026-03-15)
+Successfully materialized the logical translation bridge between the high-level JSON AST and the low-level AOT Virtual Machine.
+
+### Added — Architecture (Parallel Feature)
+- **AST Translation Pipeline (`vm/compiler.rs`)**: Implemented `compile_node` to recursively parse `ast::Node` trees. Translates standard literal primitives and binary operations directly into linear instruction sets matching the Reverse Polish Notation (RPN) specification natively understood by the machine loop. Left Node eval -> Right Node eval -> Operator.
+- **Constant Deduplication**: Augmented the compiler to check memory addresses dynamically. Recurring Strings, Floats, or Integers are now uniquely mapped into the `constants` pool vector, completely stopping memory ballooning when running intensely iterative ASTs.
+- **Compiler Validation Tests**: Bootstrapped inline unit tests explicitly simulating AST logic loops and validating flat bytecode array emission and deduplicated constant tracking.
+
+### Compliance
+- Git commit cleanly pushed by autonomous agent. Commit message: `Feat: Sprint 95 - Implement AST-to-Bytecode Compilation`.
+
+---
+
 ## [v0.94.0] - Sprint 94: Initialize Bytecode VM and Compiler Architecture (2026-03-15)
-Initiated the transition from real-time AST evaluation to Ahead-of-Time Bytecode compilation for massive 3D workload scaling.
 
 ### Added — Architecture (Parallel Feature)
 - **OpCode ISA (`vm/opcode.rs`)**: Established the foundational machine language enum `OpCode` defining `Constant(usize)`, block math operations, and execution flow.
