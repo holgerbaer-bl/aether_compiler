@@ -94,3 +94,44 @@ impl VM {
         Ok(self.stack.pop().unwrap_or(RelType::Void))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::executor::RelType;
+    use crate::vm::opcode::OpCode;
+
+    #[test]
+    fn test_vm_execution_add() {
+        let mut vm = VM::new();
+        // Represents: 10 + 5
+        let instructions = vec![
+            OpCode::Constant(0), // Push 10
+            OpCode::Constant(1), // Push 5
+            OpCode::Add,         // Pop 5, Pop 10, Push 15
+            OpCode::Return,
+        ];
+        let constants = vec![RelType::Int(10), RelType::Int(5)];
+
+        let result = vm.run(&instructions, &constants).unwrap();
+        assert_eq!(result, RelType::Int(15));
+    }
+
+    #[test]
+    fn test_vm_execution_complex() {
+        let mut vm = VM::new();
+        // Represents: (10 - 2) * 3
+        let instructions = vec![
+            OpCode::Constant(0), // Push 10
+            OpCode::Constant(1), // Push 2
+            OpCode::Subtract,    // Pop 2, Pop 10, Push 8
+            OpCode::Constant(2), // Push 3
+            OpCode::Multiply,    // Pop 3, Pop 8, Push 24
+            OpCode::Return,
+        ];
+        let constants = vec![RelType::Int(10), RelType::Int(2), RelType::Int(3)];
+
+        let result = vm.run(&instructions, &constants).unwrap();
+        assert_eq!(result, RelType::Int(24));
+    }
+}

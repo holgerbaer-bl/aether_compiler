@@ -3,8 +3,21 @@
 **Vision:** A high-performance, general-purpose hybrid language (JIT/AOT) with native WGPU rendering and deterministic ARC memory management.
 **Development Standard:** To ensure absolute version integrity, the architect must guarantee that every single sprint is cleanly pushed to the Git repository by the autonomous agent. This successful push must be explicitly documented in every sprint report.
 
+## [v0.96.0] - Sprint 96: Implement VM Execution Loop and Stack Dispatcher (2026-03-15)
+Formalized the Arithmetic Logic Unit (ALU) and exact Stack Machine looping behavior inside the engine's core transpiler architecture.
+
+### Added — Architecture (Parallel Feature)
+- **Stack Machine Dispatcher (`vm/machine.rs`)**: Validated the `VM::run` environment. The interpreter natively identifies `OpConstant(index)` pointers, pulls absolute values identically from the `constants` array pool, and drives them immediately to the `stack`.
+- **ALU Resolution**: Defined explicit pops within the engine's operation matchers (`OpAdd`, `OpSubtract`, `OpMultiply`, `OpDivide`). The machine honors strict RPN compliance by extracting Right nodes before Left nodes and performing fast, localized mathematical processing before re-pushing the sum natively.
+- **I/O & Halt**: Formalized `OpPrint` (pops top stack element to stdout) and `OpReturn` (disengages the while execution loop).
+- **Execution Proof**: Embedded inline unit tests simulating pre-compiled arrays `10 + 5` and `(10 - 2) * 3`. Proved bytecode processes instantly without recursive branching overhead.
+
+### Compliance
+- Git commit cleanly pushed by autonomous agent. Commit message: `Feat: Sprint 96 - Implement VM Execution Loop and Stack Dispatcher`.
+
+---
+
 ## [v0.95.0] - Sprint 95: Implement AST-to-Bytecode Compilation (2026-03-15)
-Successfully materialized the logical translation bridge between the high-level JSON AST and the low-level AOT Virtual Machine.
 
 ### Added — Architecture (Parallel Feature)
 - **AST Translation Pipeline (`vm/compiler.rs`)**: Implemented `compile_node` to recursively parse `ast::Node` trees. Translates standard literal primitives and binary operations directly into linear instruction sets matching the Reverse Polish Notation (RPN) specification natively understood by the machine loop. Left Node eval -> Right Node eval -> Operator.

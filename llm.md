@@ -11,7 +11,7 @@
 KnotenCore programs are initially modeled as AST scripts in either JSON (`.nod`) or the Knoten DSL (`.knoten`). The runtime interprets them (JIT), compiles them to standalone Rust binaries, or processes them Ahead-of-Time via the `src/vm/` Bytecode Machine for frictionless performance scaling above raw AST constraints. All OS resources are managed through a deterministic ARC registry.
 
 ### Core Architecture Constraints
-- **Execution Backend**: The engine is actively migrating intensive workloads away from recursive AST evaluation (`ExecutionEngine`) toward flat instruction processing (`Compiler` emitting `OpCode` to the new `VM`). The transpiler enforces strict Reverse Polish Notation (RPN) evaluations: Left nodes compile before Right nodes, followed by Operator codes, assuring rapid unrolled stack processing. Expect new structures in `src/vm`.
+- **Execution Backend (AOT/JIT)**: The engine is migrating intensive logic towards flat bytecode processing emitting `OpCode` to the `VM`. The `VM` dispatcher (`machine.rs`) operates as a rigorous Stack Machine running an Arithmetic Logic Unit (ALU). Postfix evaluation is strict: evaluating an operation pops the Right side, then the Left, calculates, and pushes the result. Validated structures rest in `src/vm`.
 - **GUI & Threading**: Graphical contexts rely completely on WGPU, and cross-thread communication uses `winit::event_loop::EventLoopProxy<RenderCommand>` for zero-latency messaging over standard mpsc channels.
 - **Path Validation**: All disk interaction must be validated through `executor::ExecutionEngine::validate_fs_path`. This uses `dunce::canonicalize` to aggressively normalize Windows UNC prefixes (`\\?\`).
 
