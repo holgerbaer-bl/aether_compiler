@@ -19,14 +19,15 @@
 
 ## Engine Architecture
 
-The core engine is modularized into specialized components for stability and minimal compilation overhead:
+The core engine is modularized into specialized components:
 
 | Module | Role |
 |---|---|
 | `src/executor.rs` | **Coordinator & State-Holder** — Orchestrates data flow between all modules |
-| `src/evaluator.rs` | **Brain** — AST parsing, recursive evaluation, and pure logical/mathematical execution |
+| `src/evaluator.rs` | **Interpreter (JIT)** — AST parsing, recursive evaluation, and pure logical/mathematical execution |
+| `src/vm/mod.rs` | **Virtual Machine (AOT)** — *[New]* Dedicated Ahead-of-Time Bytecode compiler scaling complex loops past AST limits |
 | `src/renderer.rs` | **Eyes** — WGPU logic, shader management, hardware-instancing, and high-performance draw calls |
-| `src/window.rs` | **Skin** — winit event-loop, application lifecycle, hardware input (MouseGrab/Keyboard) |
+| `src/window.rs` | **Skin** — winit event-loop, application lifecycle, hardware input |
 | `src/async_bridge.rs` | **Nervous System** — Non-blocking `Fetch` and `Extract` via background worker threads |
 
 ---
