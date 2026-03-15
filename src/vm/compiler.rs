@@ -60,6 +60,51 @@ impl Compiler {
                 self.instructions.push(OpCode::Divide);
                 true
             }
+            Node::Eq(l, r) => {
+                if !self.compile_node(l) || !self.compile_node(r) { return false; }
+                self.instructions.push(OpCode::Equal);
+                true
+            }
+            Node::Gt(l, r) => {
+                if !self.compile_node(l) || !self.compile_node(r) { return false; }
+                self.instructions.push(OpCode::Greater);
+                true
+            }
+            Node::Lt(l, r) => {
+                if !self.compile_node(l) || !self.compile_node(r) { return false; }
+                self.instructions.push(OpCode::Less);
+                true
+            }
+            Node::Block(stmts) => {
+                for stmt in stmts {
+                    if !self.compile_node(stmt) { return false; }
+                }
+                true
+            }
+            Node::If(cond, then_block, else_block) => {
+                if !self.compile_node(cond) { return false; }
+                let jump_if_false_idx = self.instructions.len();
+                self.instructions.push(OpCode::JumpIfFalse(0)); // Placeholder
+
+                if !self.compile_node(then_block) { return false; }
+
+                if let Some(else_branch) = else_block {
+                    let jump_idx = self.instructions.len();
+                    self.instructions.push(OpCode::Jump(0)); // Placeholder
+
+                    // Backpatch JumpIfFalse to jump here (start of else block)
+                    self.instructions[jump_if_false_idx] = OpCode::JumpIfFalse(self.instructions.len());
+
+                    if !self.compile_node(else_branch) { return false; }
+
+                    // Backpatch unconditional Jump to jump past the else block
+                    self.instructions[jump_idx] = OpCode::Jump(self.instructions.len());
+                } else {
+                    // Backpatch JumpIfFalse to jump past the then block
+                    self.instructions[jump_if_false_idx] = OpCode::JumpIfFalse(self.instructions.len());
+                }
+                true
+            }
             Node::Print(expr) => {
                 if !self.compile_node(expr) { return false; }
                 self.instructions.push(OpCode::Print);

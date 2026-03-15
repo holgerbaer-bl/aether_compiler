@@ -5,6 +5,11 @@ pub enum OpCode {
     Subtract,
     Multiply,
     Divide,
+    Equal,
+    Greater,
+    Less,
+    Jump(usize),
+    JumpIfFalse(usize),
     Print,
     Return,
 }

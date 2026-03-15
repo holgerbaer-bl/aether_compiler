@@ -3,8 +3,20 @@
 **Vision:** A high-performance, general-purpose hybrid language (JIT/AOT) with native WGPU rendering and deterministic ARC memory management.
 **Development Standard:** To ensure absolute version integrity, the architect must guarantee that every single sprint is cleanly pushed to the Git repository by the autonomous agent. This successful push must be explicitly documented in every sprint report.
 
+## [v0.97.0] - Sprint 97: Implement Control Flow and Branching (2026-03-15)
+Achieved Turing completeness within the Bytecode VM by formalizing conditional jumps, logical operators, and compiler backpatching.
+
+### Added — Architecture (Parallel Feature)
+- **Logical Operations (`vm/opcode.rs`)**: Integrated `OpEqual`, `OpGreater`, and `OpLess` directly into the Arithmetic Logic Unit, allowing inline boolean evaluations on the execution stack.
+- **Instruction Pointer Flow (`vm/machine.rs`)**: Augmented the `VM::run` loop to support `OpJump(usize)` and `OpJumpIfFalse(usize)`. The system now dynamically mutates the `ip` to break linear execution upon encountering branch conditions.
+- **Compiler Backpatching (`vm/compiler.rs`)**: Re-tooled `compile_node` to parse `Node::If` trees. The AOT compiler natively emits placeholder jump instructions, compiles internal TRUE/FALSE blocks, measures byte offsets dynamically, and backpatches exact length markers over the placeholders before finalizing the instruction pool. 
+
+### Compliance
+- Git commit cleanly pushed by autonomous agent. Commit message: `Feat: Sprint 97 - Implement Control Flow and Branching`.
+
+---
+
 ## [v0.96.0] - Sprint 96: Implement VM Execution Loop and Stack Dispatcher (2026-03-15)
-Formalized the Arithmetic Logic Unit (ALU) and exact Stack Machine looping behavior inside the engine's core transpiler architecture.
 
 ### Added — Architecture (Parallel Feature)
 - **Stack Machine Dispatcher (`vm/machine.rs`)**: Validated the `VM::run` environment. The interpreter natively identifies `OpConstant(index)` pointers, pulls absolute values identically from the `constants` array pool, and drives them immediately to the `stack`.

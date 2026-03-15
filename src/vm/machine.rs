@@ -81,6 +81,43 @@ impl VM {
                         _ => return Err("Invalid types for Divide".into()),
                     }
                 }
+                OpCode::Equal => {
+                    let r = self.stack.pop().unwrap_or(RelType::Void);
+                    let l = self.stack.pop().unwrap_or(RelType::Void);
+                    self.stack.push(RelType::Bool(l == r));
+                }
+                OpCode::Less => {
+                    let r = self.stack.pop().unwrap_or(RelType::Void);
+                    let l = self.stack.pop().unwrap_or(RelType::Void);
+                    match (l, r) {
+                        (RelType::Int(a), RelType::Int(b)) => self.stack.push(RelType::Bool(a < b)),
+                        (RelType::Float(a), RelType::Float(b)) => self.stack.push(RelType::Bool(a < b)),
+                        _ => self.stack.push(RelType::Bool(false)),
+                    }
+                }
+                OpCode::Greater => {
+                    let r = self.stack.pop().unwrap_or(RelType::Void);
+                    let l = self.stack.pop().unwrap_or(RelType::Void);
+                    match (l, r) {
+                        (RelType::Int(a), RelType::Int(b)) => self.stack.push(RelType::Bool(a > b)),
+                        (RelType::Float(a), RelType::Float(b)) => self.stack.push(RelType::Bool(a > b)),
+                        _ => self.stack.push(RelType::Bool(false)),
+                    }
+                }
+                OpCode::JumpIfFalse(target_ip) => {
+                    let cond = self.stack.pop().unwrap_or(RelType::Void);
+                    let is_true = match cond {
+                        RelType::Bool(b) => b,
+                        RelType::Int(i) => i != 0,
+                        _ => false,
+                    };
+                    if !is_true {
+                        self.ip = *target_ip;
+                    }
+                }
+                OpCode::Jump(target_ip) => {
+                    self.ip = *target_ip;
+                }
                 OpCode::Print => {
                     let val = self.stack.pop().unwrap_or(RelType::Void);
                     println!("{}", val);
@@ -133,5 +170,23 @@ mod tests {
 
         let result = vm.run(&instructions, &constants).unwrap();
         assert_eq!(result, RelType::Int(24));
+    }
+
+    #[test]
+    fn test_vm_jump_if_false() {
+        let mut vm = VM::new();
+        // Represents: if (false) { 10 } else { 20 }
+        let instructions = vec![
+            OpCode::Constant(0),       // Push false
+            OpCode::JumpIfFalse(4),    // If false, jump to index 4
+            OpCode::Constant(1),       // Push 10
+            OpCode::Jump(5),           // Jump to end (index 5)
+            OpCode::Constant(2),       // Push 20 (index 4)
+            OpCode::Return,            // Return (index 5)
+        ];
+        let constants = vec![RelType::Bool(false), RelType::Int(10), RelType::Int(20)];
+
+        let result = vm.run(&instructions, &constants).unwrap();
+        assert_eq!(result, RelType::Int(20));
     }
 }
